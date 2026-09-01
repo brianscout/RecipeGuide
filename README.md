@@ -94,3 +94,43 @@ One time, from the phone. The URL is permanent, so this never needs repeating.
 3. Name it `RecipeGuide` and give it the HTTPS URL above.
 
 It then appears as a tile at the bottom of the app grid on the glasses.
+
+## The capability probe
+
+Whether a Web App on these glasses can make a sound or a vibration is not
+answered by the platform documentation — audio output and haptics appear on
+neither the supported nor the unsupported list. `scripts/probe-capabilities.html`
+settles it by attempting all three channels and rendering each outcome on the
+display, because there is no console to read on the glasses.
+
+Desktop first, to confirm the page itself works:
+
+```bash
+node scripts/serve.mjs
+```
+
+Then open `http://localhost:8000/scripts/probe-capabilities.html`. A desktop
+pass proves nothing about the device, so register it as its own Web App tile —
+same steps as above, named `Probe`, with the URL
+<https://brianscout.github.io/RecipeGuide/scripts/probe-capabilities.html>.
+
+Pinch once per channel. Each probe runs alone so a tone or a buzz can be
+attributed to a single cause, and audio needs a user gesture, so running on a
+pinch is what makes the result about the platform rather than about the
+autoplay policy.
+
+Read each row as two separate facts:
+
+| Status | What the platform did |
+| --- | --- |
+| `accepted` | Took the request. Whether anything was audible is a separate question. |
+| `blocked` | Refused for a policy reason. Likely reachable under other conditions. |
+| `rejected` | Refused for a capability reason. Treat as unavailable. |
+| `absent` | The API is not on the platform at all. |
+| `error` | Threw before the attempt could be made. |
+
+`accepted` is not the finding on its own. Write down what you actually heard
+and felt next to it, then fold both into
+[issue #3](https://github.com/brianscout/RecipeGuide/issues/3) and into
+`docs/SPEC.md`, *Further Notes — Open questions carried into implementation*,
+item 2.

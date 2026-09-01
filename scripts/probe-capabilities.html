@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1, user-scalable=no">
+<!-- Required for the glasses to accept this as a Web App. This page is
+     registered as its own tile so it can be launched on the device; see
+     README.md, "The capability probe". -->
+<meta name="mrbd-web-app-capable" content="yes">
+<title>Capability probe</title>
+<link rel="icon" type="image/png" sizes="192x192" href="../assets/icon-192.png">
+<link rel="apple-touch-icon" href="../assets/icon-192.png">
+<style>
+  /* The app's tokens, inlined. This page is a diagnostic that must survive
+     independently of styles.css, the same way measure-step-ceiling.html does. */
+  :root {
+    --ground: #000000;
+    --content: #fff6e8;
+    --accent: #ffb020;
+    --dim: #8c8578;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 600px; height: 600px; overflow: hidden;
+    background: var(--ground); color: var(--content);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 20px; line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    user-select: none; touch-action: none;
+  }
+  .screen {
+    width: 600px; height: 600px;
+    display: flex; flex-direction: column; gap: 20px; padding: 40px;
+  }
+  .title { font-size: 28px; font-weight: 700; flex: none; }
+  .probes { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 20px; }
+  .probe { display: flex; flex-direction: column; gap: 2px; }
+  .probe__label { font-size: 20px; font-weight: 600; color: var(--dim); }
+  .probe__detail { font-size: 16px; color: var(--dim); }
+  /* Bright is present. On an additive waveguide dim reads as nearly absent,
+     which is the right visual grammar for a capability that is not there. */
+  .probe--current .probe__label { color: var(--content); }
+  .probe--accepted .probe__label { color: var(--accent); }
+  .probe--accepted .probe__detail { color: var(--content); }
+  .hint { flex: none; font-size: 18px; color: var(--accent); }
+  .agent { flex: none; font-size: 13px; color: var(--dim); overflow: hidden; }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <h1 class="title">Audio &amp; haptics probe</h1>
+    <div class="probes" id="probes"></div>
+    <p class="hint" id="hint">&mdash;</p>
+    <p class="agent" id="agent"></p>
+  </main>
+<script type="module">
+// Runs the capability probes on the device and renders the outcome, because
+// there is no console to read on the glasses. The classification logic lives
+// in src/probe-capabilities.js and is unit tested; this file is the edge —
+// key handling, DOM, and the real browser APIs.
+//
+// Probes run one at a time on a pinch rather than all at once on load. Two
+// reasons: audio needs a user gesture, so a load-time attempt would report an
+// autoplay block rather than the platform's actual capability; and overlapping
+// tones cannot be attributed to a single source by ear.
+//
+// See docs/SPEC.md, "Open questions carried into implementation", item 2.
+
+import { PROBES, runProbe, summarize, describeResult } from '../src/probe-capabilities.js';
+
+const env = {
+  createAudio: typeof Audio === 'undefined' ? undefined : (src) => new Audio(src),
+  AudioContext: window.AudioContext ?? window.webkitAudioContext,
+  vibrate: navigator.vibrate ? (pattern) => navigator.vibrate(pattern) : undefined,
+  wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+const probesEl = document.getElementById('probes');
+const hintEl = document.getElementById('hint');
+
+// One row per probe, drawn once. Rows are reserved from the start so a result
+// arriving never reflows the rows above it.
+const rows = PROBES.map((probe) => {
+  const row = document.createElement('div');
+  row.className = 'probe';
+  row.innerHTML = '<p class="probe__label"></p><p class="probe__detail"></p>';
+  row.querySelector('.probe__label').textContent = probe.label;
+  row.querySelector('.probe__detail').textContent = 'not run';
+  probesEl.append(row);
+  return row;
+});
+
+function draw(index, { state, label, detail }) {
+  rows[index].className = `probe probe--${state}`;
+  rows[index].querySelector('.probe__label').textContent = label;
+  rows[index].querySelector('.probe__detail').textContent = detail;
+}
+
+const results = [];
+let next = 0;
+let busy = false;
+
+async function step() {
+  if (busy) return;
+
+  if (next >= PROBES.length) {
+    // Finished. Start over so the observer can hear or feel it a second time
+    // before deciding what to write down.
+    results.length = 0;
+    next = 0;
+    rows.forEach((row, index) => draw(index, {
+      state: 'idle', label: PROBES[index].label, detail: 'not run',
+    }));
+    hintEl.textContent = 'Pinch to probe';
+    return;
+  }
+
+  busy = true;
+  const probe = PROBES[next];
+  draw(next, { state: 'current', label: probe.label, detail: 'running…' });
+  hintEl.textContent = 'Watch, listen, feel';
+
+  const result = await runProbe(probe.id, env);
+  results.push(result);
+  draw(next, { state: result.status, label: probe.label, detail: describeResult(result) });
+
+  next += 1;
+  busy = false;
+  hintEl.textContent = next >= PROBES.length
+    ? 'Done. Transcribe the three lines. Pinch to run again.'
+    : `Pinch for ${PROBES[next].label}`;
+
+  // Available for a desktop pass where a console does exist; on the glasses
+  // the rows above are the only readable output.
+  if (next >= PROBES.length) console.log(summarize(results).join('\n'));
+}
+
+document.addEventListener('keydown', (event) => {
+  // Pinch is the only input this page uses. The swipes have nothing to move
+  // between, and a page with one action should not pretend otherwise.
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  step();
+});
+
+// The platform build is part of the finding: a result is only meaningful
+// alongside the browser that produced it.
+document.getElementById('agent').textContent = navigator.userAgent;
+hintEl.textContent = 'Pinch to probe';
+</script>
+</body>
+</html>
