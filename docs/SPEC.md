@@ -172,7 +172,7 @@ recipe = {
 }
 ```
 
-A step carrying a duration offers a timer, labelled with its timer label.
+A step carrying a duration offers a timer, labelled with its timer label. Required and optional fields, the validation rules, and the measured ceiling on step text are documented in [RECIPE-SCHEMA.md](RECIPE-SCHEMA.md).
 
 Local storage is used only for session state, never as the source of truth for recipe content. Storing recipes there was rejected: the platform has no text input, so recipes can never be authored or edited on the device, which leaves a synchronization problem and a storage ceiling in exchange for nothing.
 

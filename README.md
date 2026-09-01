@@ -45,15 +45,28 @@ The Meta Ray-Ban Display Web App Simulator Chrome extension is a closer
 approximation still — it adds additive blending and environment backgrounds, so
 it shows what pure black actually looks like on the waveguide.
 
+## Recipes
+
+One JSON file per recipe in `recipes/`, deployed as authored. The schema, the
+150 character ceiling on step text, and how that number was measured are in
+[docs/RECIPE-SCHEMA.md](docs/RECIPE-SCHEMA.md). Every recipe in the folder is
+validated by the test run, so a malformed one cannot reach a deploy.
+
+The ceiling is re-measured, not re-guessed, whenever the cook screen changes:
+serve the repository and open
+`http://localhost:8000/scripts/measure-step-ceiling.html`.
+
 ## Tests
 
 ```bash
 node --test
 ```
 
-Node's built-in runner, no installed packages. Only the pure core is covered:
-the reducer and recipe validation. Rendering, input, storage, and the tick
-interval are I/O at the edges and are verified by hand.
+Node's built-in runner, no installed packages. `package.json` exists only to
+declare `"type": "module"` so Node reads `src/` as ES modules; there are no
+dependencies and no build step. Only the pure core is covered: the reducer and
+recipe validation. Rendering, input, storage, and the tick interval are I/O at
+the edges and are verified by hand.
 
 ## The icon
 
