@@ -1,0 +1,5 @@
+# The deployed artifact is served as authored, with no build step, so line
+# endings are pinned to LF everywhere rather than left to core.autocrlf.
+* text=auto eol=lf
+
+*.png binary
