@@ -1,0 +1,73 @@
+/* Display constraints are platform requirements, not style choices.
+   Pure black is fully transparent on the additive waveguide: the design is
+   bright content on an absent ground. See docs/SPEC.md, "Display constraints". */
+
+:root {
+  --ground: #000000;
+  --content: #fff6e8;
+  --accent: #ffb020;
+  --dim: #8c8578;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 600px;
+  height: 600px;
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--content);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 20px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  /* There is no pointer and no text entry on the device. */
+  user-select: none;
+  touch-action: none;
+}
+
+.screen {
+  width: 600px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 40px;
+  text-align: center;
+}
+
+.title {
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--content);
+}
+
+.subtitle {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.hint {
+  font-size: 20px;
+  color: var(--content);
+}
+
+.readout {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--accent);
+  min-height: 28px;
+}
+
+.readout--dim {
+  color: var(--dim);
+}
