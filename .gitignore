@@ -1,0 +1,18 @@
+# The repository root is the deployed artifact — GitHub Pages serves it as
+# authored — so anything ignored here is something that must never reach a
+# deploy, not merely something not worth committing.
+
+# Agent session state. launch.json is the dev server this project is iterated
+# with and belongs to everyone working on it; the rest is per-session scratch.
+.claude/*
+!.claude/launch.json
+
+# There are no dependencies and no build step, and package.json exists only to
+# declare "type": "module". An npm install here would be a mistake rather than
+# a setup step, but it would be a served mistake, so it is ignored.
+node_modules/
+
+# Desktop cruft. The two platforms the README gives iteration instructions for
+# each leave their own, and both would be deployed.
+Thumbs.db
+.DS_Store
