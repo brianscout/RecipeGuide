@@ -14,6 +14,8 @@ import {
   stepIndex,
   timersAt,
   timerOffer,
+  alertingTimer,
+  firedTimers,
 } from './reduce.js';
 
 function element(tag, className, text) {
@@ -101,8 +103,9 @@ function chip(className, label, value) {
 const offerChip = (offer) =>
   chip('timers__timer timers__timer--offer', `Start ${offer.label}`, `${offer.minutes} min`);
 
-// A finished timer reads as finished. Announcing the moment it expires — the
-// takeover, its decay, and acknowledging it — arrives with the alert ticket.
+// A finished timer reads as finished, and keeps reading that way until a pinch
+// clears it: the brightest thing in the row, and the only moving thing on the
+// screen. This is what the takeover decays into, and it does not time out.
 const timerChip = (timer) =>
   chip(
     timer.finished ? 'timers__timer timers__timer--finished' : 'timers__timer',
@@ -211,6 +214,35 @@ const SCREENS = {
   [DONE]: done,
 };
 
+// --- The alert takeover ---------------------------------------------------
+// A finished timer replaces the whole display rather than taking a corner of
+// it, because a cook who is looking at a pan is not reading the corners. It
+// names the timer that fired: two countdowns running means "a timer finished"
+// is not enough to act on.
+//
+// Nothing here dismisses it. The takeover stands down on the clock, ten
+// seconds in, and the pinch it offers acknowledges the timer for good — which
+// is the difference between getting out of a cook's way and being forgotten.
+// Where a second timer has fired too, it is named as well, so the pinch that
+// clears this one is not a surprise.
+function takeover(state) {
+  const timer = alertingTimer(state);
+  if (!timer) return null;
+
+  const also = firedTimers(state).filter((fired) => fired.id !== timer.id);
+  const node = element('main', 'screen screen--alert');
+  node.append(
+    element('p', 'eyebrow', 'Timer finished'),
+    element('h1', 'alert', timer.label),
+    element('p', 'alert__hint', 'Pinch to clear'),
+  );
+  if (also.length > 0) {
+    const labels = also.map((fired) => fired.label).join(', ');
+    node.append(element('p', 'alert__also', `${labels} finished too`));
+  }
+  return node;
+}
+
 /**
  * Draws the state into the root, replacing whatever was there. The clock is an
  * argument here for the same reason it is one in the reducer: a timer's
@@ -224,8 +256,12 @@ const SCREENS = {
  */
 export function render(root, state, recipes, now) {
   const draw = SCREENS[state.screen];
+  // The takeover is drawn over whatever the state's screen would have been,
+  // and the state underneath it is untouched: when it stands down, the cook is
+  // back on the instruction they were reading, at the position they were at.
   root.replaceChildren(
-    draw ? draw(state, recipes, now) : unknown(`No screen for "${state.screen}"`),
+    takeover(state) ??
+      (draw ? draw(state, recipes, now) : unknown(`No screen for "${state.screen}"`)),
   );
 }
 

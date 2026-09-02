@@ -18,6 +18,8 @@ import {
   HYDRATE,
   timersAt,
   timerOffer,
+  alertingTimer,
+  firedTimers,
 } from '../src/reduce.js';
 
 // The catalogue the reducer is bound to. Only the fields the menu reads are
@@ -345,8 +347,10 @@ test('a timer is stored as the instant it ends, not as a counter', () => {
   const [timer] = reduce(onTimerStep(), ACTIVATE, NOW).timers;
   assert.equal(timer.endsAt, later(20));
   // Nothing on a timer decrements, so nothing on it can fall out of date while
-  // the application is not running.
-  assert.deepEqual(Object.keys(timer).sort(), ['endsAt', 'id', 'label', 'sourceStep']);
+  // the application is not running. `state` is the exception that proves it:
+  // it records whether the alert has announced this timer, which is the one
+  // fact about a timer that the clock cannot derive.
+  assert.deepEqual(Object.keys(timer).sort(), ['endsAt', 'id', 'label', 'sourceStep', 'state']);
 });
 
 test('the same start at two different instants ends twenty minutes after each', () => {
@@ -452,13 +456,14 @@ test('coming back to a step whose timer is running does not offer another', () =
 });
 
 // A finished timer is spent, and a cook who wants that simmer again should not
-// have to reach for a phone.
+// have to reach for a phone. The pinch that clears it comes first — see the
+// alert sequence below — so starting it again is the pinch after that one.
 test('a step offers its timer again once that timer has finished', () => {
   const started = reduce(onTimerStep(), ACTIVATE, NOW);
   assert.equal(timerOffer(started, CATALOGUE, later(20)).label, 'Simmer');
-  const restarted = reduce(started, ACTIVATE, later(20));
-  assert.equal(restarted.timers.length, 2);
-  assert.equal(timersAt(restarted, later(20))[1].remainingMs, 20 * MINUTE);
+  const restarted = after([ACTIVATE, ACTIVATE], { from: started, now: later(20) });
+  assert.equal(restarted.timers.length, 1);
+  assert.equal(timersAt(restarted, later(20))[0].remainingMs, 20 * MINUTE);
 });
 
 // A timer outlives the recipe it was started in, so what a timer was started
@@ -499,6 +504,214 @@ test('deriving remaining time does not mutate the state it reads', () => {
     ['Simmer', 'Rest'],
   );
 });
+
+// --- The alert sequence ---------------------------------------------------
+// Three phases, and the middle one is the reason for the other two: takeover,
+// decay, persist. A pure takeover would stomp on the step a cook is halfway
+// through reading; a pure indicator would silently miss a cook at the stove.
+//
+// Every assertion below drives a ten second decay by passing a second
+// timestamp. Nothing waits, and no clock is faked.
+
+const SECOND = 1000;
+const secondsAfter = (instant, count) => instant + count * SECOND;
+
+// A twenty minute simmer, started at NOW, so it ends at later(20).
+const simmering = () => reduce(onTimerStep(), ACTIVATE, NOW);
+
+// That simmer, on the first event to arrive after the instant it ended.
+const takenOver = () => reduce(simmering(), TICK, later(20));
+
+test('a timer reaching zero takes over the display, naming the timer that fired', () => {
+  const state = takenOver();
+  assert.equal(state.alert.timerId, simmering().timers[0].id);
+  assert.equal(state.alert.since, later(20));
+  assert.equal(alertingTimer(state).label, 'Simmer');
+});
+
+test('a timer still running raises no alert', () => {
+  assert.equal(reduce(simmering(), TICK, later(19)).alert, null);
+});
+
+test('the takeover is raised by whatever event the clock arrives on', () => {
+  for (const event of [TICK, SWIPE_RIGHT, SWIPE_LEFT, FOCUS_DOWN]) {
+    const state = reduce(simmering(), event, later(20));
+    assert.equal(alertingTimer(state)?.label, 'Simmer', event);
+  }
+});
+
+test('the takeover stands its ground for ten seconds without any input', () => {
+  const fired = takenOver();
+  for (const count of [0, 1, 9, 9.9]) {
+    const state = reduce(fired, TICK, secondsAfter(later(20), count));
+    assert.notEqual(state.alert, null, `${count} seconds in`);
+  }
+});
+
+test('the takeover stands down on its own after ten seconds', () => {
+  const state = reduce(takenOver(), TICK, secondsAfter(later(20), 10));
+  assert.equal(state.alert, null);
+});
+
+test('a finished timer is still signalling on the screen the takeover returns to', () => {
+  const decayed = reduce(takenOver(), TICK, secondsAfter(later(20), 10));
+  const [timer] = timersAt(decayed, secondsAfter(later(20), 10));
+  assert.equal(timer.label, 'Simmer');
+  assert.equal(timer.finished, true);
+  assert.deepEqual(
+    firedTimers(decayed).map((fired) => fired.label),
+    ['Simmer'],
+  );
+});
+
+test('the takeover returns to the screen the cook was on, not to another one', () => {
+  const before = simmering();
+  const decayed = after([TICK, TICK], { from: before, now: later(30) });
+  assert.equal(decayed.screen, before.screen);
+  assert.equal(decayed.position, before.position);
+  assert.equal(decayed.recipeId, before.recipeId);
+});
+
+// The failure this guards against is the one that ruins dinner: a cook whose
+// hands were full while the takeover came and went.
+test('the signalling state never times out however long it is left', () => {
+  let state = takenOver();
+  for (const minutes of [1, 5, 30, 600]) {
+    state = reduce(state, TICK, later(20 + minutes));
+    assert.equal(state.alert, null, `${minutes} minutes on`);
+    assert.deepEqual(
+      firedTimers(state).map((timer) => timer.label),
+      ['Simmer'],
+      `${minutes} minutes on`,
+    );
+  }
+});
+
+test('a decayed takeover is never raised a second time by the same timer', () => {
+  const decayed = reduce(takenOver(), TICK, secondsAfter(later(20), 10));
+  assert.equal(reduce(decayed, TICK, later(25)).alert, null);
+});
+
+test('enter acknowledges the timer the takeover names and clears both', () => {
+  const state = reduce(takenOver(), ACTIVATE, secondsAfter(later(20), 2));
+  assert.deepEqual(state.timers, []);
+  assert.equal(state.alert, null);
+});
+
+test('enter acknowledges a timer still signalling after the takeover decayed', () => {
+  const decayed = reduce(takenOver(), TICK, secondsAfter(later(20), 10));
+  const state = reduce(decayed, ACTIVATE, later(25));
+  assert.deepEqual(state.timers, []);
+  assert.deepEqual(firedTimers(state), []);
+});
+
+// Acknowledging comes before whatever else the screen would have done with
+// that pinch. Something on screen is asking to be cleared, so the first pinch
+// clears it and the second does what the cook came to do.
+test('acknowledging pre-empts the action the screen would otherwise take', () => {
+  const cleared = reduce(takenOver(), ACTIVATE, later(20));
+  assert.deepEqual(cleared.timers, []);
+  const restarted = reduce(cleared, ACTIVATE, later(20));
+  assert.equal(restarted.timers.length, 1);
+  assert.equal(restarted.timers[0].endsAt, later(40));
+});
+
+test('a pinch in the menu acknowledges a finished timer rather than selecting', () => {
+  const abandoned = after([SWIPE_LEFT, SWIPE_LEFT], { from: takenOver(), now: later(20) });
+  assert.equal(abandoned.screen, MENU);
+
+  const acknowledged = reduce(abandoned, ACTIVATE, later(20));
+  assert.equal(acknowledged.screen, MENU);
+  assert.equal(acknowledged.recipeId, null);
+  assert.deepEqual(acknowledged.timers, []);
+  // And the pinch after it selects, as it would have with nothing signalling.
+  assert.equal(reduce(acknowledged, ACTIVATE, later(20)).screen, INGREDIENTS);
+});
+
+test('a pinch does not clear a timer that is still counting', () => {
+  // Rest ends at later(10), Simmer at later(20). Neither has fired here, and
+  // the step the cook is on has no timer left to offer.
+  const state = reduce(twoRunning(), ACTIVATE, later(8));
+  assert.deepEqual(
+    state.timers.map((timer) => timer.label),
+    ['Simmer', 'Rest'],
+  );
+});
+
+// The platform may suspend the page, so a gesture can be the first event to
+// arrive after a timer ended. The pinch acknowledges the timer it finds
+// finished rather than starting the step's timer over the top of it.
+test('a pinch arriving after a timer ended acknowledges it', () => {
+  const state = reduce(twoRunning(), ACTIVATE, later(12));
+  assert.deepEqual(
+    state.timers.map((timer) => timer.label),
+    ['Simmer'],
+  );
+});
+
+// --- Concurrent expiry ----------------------------------------------------
+// Two timers finishing close together is the case an alert design loses one
+// in. Neither is lost here: the takeover names the one that just fired, every
+// fired timer signals in the row, and each is acknowledged on its own pinch.
+
+test('two timers expiring in the same tick are both surfaced', () => {
+  const state = reduce(twoRunning(), TICK, later(20));
+  assert.deepEqual(
+    firedTimers(state).map((timer) => timer.label),
+    ['Rest', 'Simmer'],
+  );
+  assert.equal(alertingTimer(state).label, 'Simmer');
+});
+
+test('a second timer expiring after the first takes the display back over', () => {
+  const rested = reduce(twoRunning(), TICK, later(10));
+  assert.equal(alertingTimer(rested).label, 'Rest');
+
+  const simmered = reduce(rested, TICK, later(20));
+  assert.equal(alertingTimer(simmered).label, 'Simmer');
+  assert.equal(simmered.alert.since, later(20));
+  assert.deepEqual(
+    firedTimers(simmered).map((timer) => timer.label),
+    ['Rest', 'Simmer'],
+  );
+});
+
+test('a takeover already up is not restarted by a timer that has not fired', () => {
+  const rested = reduce(twoRunning(), TICK, later(10));
+  const held = reduce(rested, TICK, secondsAfter(later(10), 5));
+  assert.deepEqual(held.alert, rested.alert);
+});
+
+test('each of two finished timers is acknowledged by its own pinch', () => {
+  const both = reduce(twoRunning(), TICK, later(20));
+  const first = reduce(both, ACTIVATE, later(20));
+  assert.deepEqual(
+    first.timers.map((timer) => timer.label),
+    ['Rest'],
+  );
+  assert.equal(first.alert, null);
+
+  const second = reduce(first, ACTIVATE, later(20));
+  assert.deepEqual(second.timers, []);
+});
+
+test('acknowledging the takeover leaves the other finished timer signalling', () => {
+  const both = reduce(twoRunning(), TICK, later(20));
+  const state = reduce(both, ACTIVATE, later(20));
+  assert.deepEqual(
+    firedTimers(state).map((timer) => timer.label),
+    ['Rest'],
+  );
+});
+
+test('the alert sequence does not mutate the state it advances', () => {
+  const running = deepFreeze(simmering());
+  const fired = reduce(running, TICK, later(20));
+  assert.equal(running.alert, null);
+  assert.equal(fired.timers[0].id, running.timers[0].id);
+  assert.notEqual(fired.timers[0], running.timers[0]);
+});
+
 
 // --- Hydration ------------------------------------------------------------
 // A reload mid-cook is the case this section is about, and on this platform it
@@ -643,6 +856,51 @@ test('hydration does not mutate the value it was handed', () => {
   const persisted = deepFreeze(saved(onIngredients('alpha'), 1));
   hydrate(persisted);
   assert.equal(persisted.savedAt, NOW - HOUR);
+});
+
+// A timer that fired while the page was not running is the case the whole
+// alert sequence exists for, and the platform may kill the page at any moment.
+test('a timer that fired while the app was closed takes over on resume', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const resumed = hydrate({ ...started, savedAt: NOW }, later(25));
+  assert.equal(alertingTimer(resumed).label, 'Simmer');
+  assert.equal(resumed.alert.since, later(25));
+});
+
+test('a timer still signalling when the app was closed is still signalling on resume', () => {
+  const decayed = after([TICK, TICK], { from: reduce(onTimerStep(), ACTIVATE, NOW), now: later(31) });
+  const resumed = hydrate({ ...decayed, savedAt: later(31) }, later(35));
+  assert.deepEqual(
+    firedTimers(resumed).map((timer) => timer.label),
+    ['Simmer'],
+  );
+  // Already announced, so resuming does not announce it a second time.
+  assert.equal(resumed.alert, null);
+});
+
+test('a takeover interrupted by a reload finishes decaying on the clock', () => {
+  const fired = reduce(reduce(onTimerStep(), ACTIVATE, NOW), TICK, later(20));
+  const during = hydrate({ ...fired, savedAt: later(20) }, later(20) + 4000);
+  assert.equal(alertingTimer(during).label, 'Simmer');
+  const after10 = hydrate({ ...fired, savedAt: later(20) }, later(20) + 10000);
+  assert.equal(after10.alert, null);
+  assert.deepEqual(
+    firedTimers(after10).map((timer) => timer.label),
+    ['Simmer'],
+  );
+});
+
+test('an alert naming a timer that did not survive hydration is discarded', () => {
+  const fired = reduce(reduce(onTimerStep(), ACTIVATE, NOW), TICK, later(20));
+  const persisted = saved({ ...fired, timers: [] }, 1);
+  assert.equal(hydrate(persisted).alert, null);
+});
+
+test('a persisted timer with no record of being announced is announced', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const legacy = { ...started, timers: started.timers.map(({ state, ...rest }) => rest) };
+  const resumed = hydrate({ ...legacy, savedAt: NOW }, later(25));
+  assert.equal(alertingTimer(resumed).label, 'Simmer');
 });
 
 

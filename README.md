@@ -39,7 +39,7 @@ nothing else in the application listens for input.
 | --- | --- |
 | Left / Right | Swipe: move position in the flow |
 | Up / Down | Swipe: cycle focus on the current screen |
-| Enter | Pinch: activate the focused element |
+| Enter | Pinch: acknowledge a finished timer, or activate the focused element |
 
 The Meta Ray-Ban Display Web App Simulator Chrome extension is a closer
 approximation still — it adds additive blending and environment backgrounds, so
@@ -71,6 +71,54 @@ from change: serve the repository and open
 `http://localhost:8000/scripts/measure-step-ceiling.html` for the cook screen
 and `http://localhost:8000/scripts/measure-ingredients-ceiling.html` for the
 ingredient list.
+
+## The alert sequence
+
+A timer reaching zero runs three phases. It takes over the whole display,
+naming the timer that fired. Ten seconds later the takeover stands down on its
+own, with no input, onto the screen the cook was already on — their step, at
+their position — with the finished timer's row now signalling. That row keeps
+signalling until a pinch clears it, however long that takes.
+
+The decay is the part worth keeping. A takeover that waited to be dismissed
+would stomp on the instruction a cook is halfway through following; an
+indicator alone would silently miss a cook at the stove, which is the failure
+that ruins dinner.
+
+A pinch acknowledges before it does anything else the screen would have done
+with it, so a cook whose hands were full when the takeover came and went can
+clear the row from wherever they are rather than finding the step that started
+it. The pinch after that does what it always would have. Where two timers have
+fired, each takes its own pinch, and the takeover names the second so the first
+pinch is not a surprise.
+
+Two channels reach a cook who is not looking at the display, and only one of
+them is known to work. Brightness and motion carry the alert; `src/haptics.js`
+also asks the band to buzz at the instant a timer fires, which is one call and
+no design of its own. Whether the band answers is the open question the
+[capability probe](#the-capability-probe) exists to settle, and until it has
+been run on the glasses the display is assumed to be carrying the alert alone.
+Desktop Chrome refuses the call without a preceding gesture and says so in the
+console; that refusal is the gate, not a finding.
+
+To exercise the sequence by hand, seed a session whose timer is a few seconds
+from ending and reload:
+
+```bash
+node scripts/serve.mjs
+```
+
+Then, in the console at `http://localhost:8000`:
+
+```js
+const now = Date.now();
+localStorage.setItem('recipeguide:session', JSON.stringify({
+  screen: 'step', recipeId: 'shakshuka', position: 4, focus: 0,
+  timers: [{ id: 'seed', label: 'Simmer', endsAt: now + 3000, sourceStep: 'shakshuka:2', state: 'running' }],
+  alert: null, savedAt: now,
+}));
+location.reload();
+```
 
 ## Resuming a session
 

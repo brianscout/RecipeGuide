@@ -242,10 +242,61 @@ body {
   color: var(--content);
 }
 
-/* Finished is the brightest thing in the row: it is the one that wants a
-   cook's attention. */
+/* Finished is the brightest thing in the row and the only moving thing on the
+   screen: it is the one that wants a cook's attention, and it keeps wanting it
+   until a pinch clears it. Motion rather than more light, because the takeover
+   has already spent the light and this has to sit under an instruction without
+   competing with it. */
 .timers__timer--finished .timers__value {
   color: var(--content);
+  animation: signal 1.6s ease-in-out infinite;
+}
+
+.timers__timer--finished .timers__label {
+  color: var(--content);
+}
+
+/* The two channels the alert has on this display are brightness and motion,
+   so both of them pulse. Nothing fades to nothing: a row caught mid-cycle by
+   a glance still has to be readable. */
+@keyframes signal {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* --- The alert takeover ---------------------------------------------------
+   A finished timer replaces the entire display. It is drawn as the brightest
+   and largest thing the application ever renders, because it has to be caught
+   by a cook whose eyes are on a pan and whose attention is somewhere else
+   again. It stands down on the clock after ten seconds; nothing here dismisses
+   it, and the pinch it offers acknowledges the timer for good. */
+.screen--alert {
+  justify-content: center;
+  gap: 16px;
+}
+
+.alert {
+  font-size: 76px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  overflow: hidden;
+  animation: signal 1.2s ease-in-out infinite;
+}
+
+.alert__hint {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--content);
+}
+
+/* Two timers finishing close together must not cost the cook one of them, so
+   the takeover names the other rather than only the one that just fired. */
+.alert__also {
+  font-size: 20px;
+  color: var(--dim);
 }
 
 .timers__more {

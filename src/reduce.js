@@ -119,6 +119,18 @@ const MINUTE_MS = 60 * 1000;
 // step three must not be mistaken for one another.
 const sourceStepOf = (recipe, index) => `${recipe.id}:${index}`;
 
+// A timer's `state` is the one fact about it the clock cannot derive: whether
+// the alert has already announced it. Everything else — how long is left,
+// whether it is over — is arithmetic on `endsAt`.
+//
+//   running  counting, or over and not yet announced
+//   fired    announced and not yet acknowledged
+//
+// There is no third value. Acknowledging drops the timer from the list, since
+// a timer a cook has dealt with is not a timer.
+const RUNNING = 'running';
+const FIRED = 'fired';
+
 /**
  * Every timer with its remaining time derived from `now`, soonest to end
  * first, so the one nearest to needing attention leads the indicator.
@@ -177,8 +189,105 @@ function startTimer(state, recipes, now) {
     label: offer.label,
     endsAt,
     sourceStep: offer.sourceStep,
+    state: RUNNING,
   };
   return { ...state, timers: [...state.timers, timer] };
+}
+
+// --- The alert sequence ---------------------------------------------------
+// What happens when a timer reaches zero, in three phases: the takeover, its
+// decay, and the signalling that persists after it. See docs/SPEC.md, "Alert
+// behaviour".
+//
+// The decay is the load-bearing part. A takeover that waited to be dismissed
+// would stomp on the instruction a cook is halfway through following; an
+// indicator alone would silently miss a cook at the stove, which is the
+// failure that ruins dinner. Standing down on its own does both jobs: it grabs
+// a cook who is not looking at the display, then gets out of the way of one
+// who cannot answer yet.
+//
+// The ticket is the whole of the takeover's state — which timer it names, and
+// when it went up. How long it has left is derived from the supplied clock,
+// like a countdown, so a takeover interrupted by a reload finishes decaying on
+// the clock rather than starting its ten seconds again.
+
+// Long enough to be caught out of the corner of an eye and read; short enough
+// that a cook mid-task is not waiting on it. Roughly ten seconds, per spec.
+const ALERT_TAKEOVER_MS = 10 * 1000;
+
+/**
+ * The timer the takeover is naming, or null when no takeover is up. Rendering
+ * asks rather than searching the timer list against the ticket itself.
+ *
+ * @param {object} state
+ * @returns {object | null}
+ */
+export function alertingTimer(state) {
+  if (state.alert === null) return null;
+  return state.timers.find((timer) => timer.id === state.alert.timerId) ?? null;
+}
+
+/**
+ * Every timer that has fired and not been acknowledged, soonest to end first.
+ * These are the rows that keep signalling after the takeover stands down, and
+ * they signal until a pinch clears them however long that takes.
+ *
+ * @param {object} state
+ * @returns {Array<object>}
+ */
+export function firedTimers(state) {
+  return state.timers.filter((timer) => timer.state === FIRED).sort((a, b) => a.endsAt - b.endsAt);
+}
+
+// A timer reaching zero raises the takeover; every timer that reached it marks
+// itself announced, so nothing is announced twice and nothing is lost. Where
+// two land together the ticket names the last to end, and the one before it is
+// already signalling in the row — soonest first, so it leads that row.
+function announce(state, now) {
+  const expired = state.timers.filter((timer) => timer.state === RUNNING && timer.endsAt <= now);
+  if (expired.length === 0) return state;
+
+  const newest = expired.reduce((latest, timer) => (timer.endsAt >= latest.endsAt ? timer : latest));
+  return {
+    ...state,
+    timers: state.timers.map((timer) =>
+      expired.includes(timer) ? { ...timer, state: FIRED } : timer,
+    ),
+    alert: { timerId: newest.id, since: now },
+  };
+}
+
+// The takeover stands down on its own, with no input and nothing to dismiss.
+// The row it returns to is still signalling; that is what does not time out.
+function decay(state, now) {
+  if (state.alert === null) return state;
+  return now - state.alert.since >= ALERT_TAKEOVER_MS ? { ...state, alert: null } : state;
+}
+
+// Every event is interpreted against an alert already brought up to date with
+// the clock that event arrived on, so a gesture raises and stands down the
+// takeover exactly as the tick behind it would have. That is what keeps the
+// sequence off the tick interval: the platform's suspension behaviour is an
+// open question, and a takeover that only happens where a tick happened would
+// be a takeover the platform can suppress.
+const advanceAlert = (state, now) => decay(announce(state, now), now);
+
+// A pinch acknowledges before it does anything else the screen would have done
+// with it. What it clears is what is asking to be cleared: the timer the
+// takeover names while one is up, and otherwise the longest-finished row.
+//
+// Pre-empting is the point. The alternative — acknowledging only during the
+// takeover — leaves a cook whose hands were full with a row they cannot clear
+// without finding the step that started it. Returning null when there is
+// nothing signalling is what hands the pinch back to the screen.
+function acknowledge(state) {
+  const target = alertingTimer(state) ?? firedTimers(state)[0];
+  if (!target) return null;
+  return {
+    ...state,
+    timers: state.timers.filter((timer) => timer !== target),
+    alert: state.alert?.timerId === target.id ? null : state.alert,
+  };
 }
 
 // Focus cycles among the focusable elements of the current screen. The menu's
@@ -210,6 +319,10 @@ function toMenu(state, recipes) {
 }
 
 function activate(state, recipes, now) {
+  // A finished timer takes the pinch before the screen does.
+  const acknowledged = acknowledge(state);
+  if (acknowledged) return acknowledged;
+
   if (state.screen === DONE) return toMenu(state, recipes);
   // The one action a step ever offers is the timer it carries, so a pinch
   // there means starting it and means nothing else.
@@ -270,17 +383,26 @@ function resumable(persisted, now) {
 // Timers are rebuilt rather than trusted: a timer without the instant it ends
 // cannot have its remaining time derived, and one kept anyway would read as
 // finished forever with no way to be cleared.
+//
+// Anything but a timer written as already announced comes back running. A
+// timer that expired while the page was not running is then announced on the
+// clock it is resumed with, which is what tells a cook returning to the app
+// that the rice is done.
 function hydratedTimers(timers) {
   if (!Array.isArray(timers)) return [];
-  return timers.filter(
-    (timer) => timer !== null && typeof timer === 'object' && Number.isFinite(timer.endsAt),
-  );
+  return timers
+    .filter((timer) => timer !== null && typeof timer === 'object' && Number.isFinite(timer.endsAt))
+    .map((timer) => ({ ...timer, state: timer.state === FIRED ? FIRED : RUNNING }));
 }
 
-// An alert names the timer it is signalling for, so one whose timer did not
-// survive is not an alert.
+// An alert names the timer it is signalling for and the instant it went up, so
+// one whose timer did not survive is not an alert, and neither is one whose
+// takeover cannot be timed. A ticket that arrives intact keeps its instant
+// rather than being restamped: the takeover has been up since it was written,
+// and a reload does not buy it another ten seconds.
 function hydratedAlert(alert, timers) {
   if (alert === null || typeof alert !== 'object') return null;
+  if (!Number.isFinite(alert.since)) return null;
   return timers.some((timer) => timer.id === alert.timerId) ? alert : null;
 }
 
@@ -312,6 +434,30 @@ function hydrate(persisted, recipes, now) {
   return at({ ...resumed, recipeId: recipe.id }, recipe, position);
 }
 
+// What the event itself means, before the alert sequence is advanced over the
+// result. Kept apart from `reduce` so that advancing the alert is one thing
+// that happens on every event rather than a line repeated in seven branches.
+function transition(state, event, recipes, now) {
+  switch (event) {
+    case FOCUS_UP:
+      return moveFocus(state, recipes, -1);
+    case FOCUS_DOWN:
+      return moveFocus(state, recipes, +1);
+    case ACTIVATE:
+      return activate(state, recipes, now);
+    case SWIPE_LEFT:
+      return move(state, recipes, -1);
+    case SWIPE_RIGHT:
+      return move(state, recipes, +1);
+    default:
+      // A tick moves nothing on its own. A running timer's remaining time is
+      // derived from the clock rather than stored, so what a tick is for is
+      // the alert sequence advancing over it and the redraw the edge performs
+      // around it.
+      return state;
+  }
+}
+
 /**
  * Binds a reducer to the recipes on offer. The catalogue is fetched at the
  * edge and never changes during a session, so it is closed over rather than
@@ -327,25 +473,10 @@ export function createReduce(recipes) {
     // has no console to discover it in. Fail at the desk instead.
     if (!EVENTS.includes(event)) throw new Error(`Unknown event: ${event}`);
 
-    switch (event) {
-      case FOCUS_UP:
-        return moveFocus(state, recipes, -1);
-      case FOCUS_DOWN:
-        return moveFocus(state, recipes, +1);
-      case ACTIVATE:
-        return activate(state, recipes, now);
-      case SWIPE_LEFT:
-        return move(state, recipes, -1);
-      case SWIPE_RIGHT:
-        return move(state, recipes, +1);
-      case HYDRATE:
-        return hydrate(state, recipes, now);
-      default:
-        // A tick moves nothing here. A running timer's remaining time is
-        // derived from the clock rather than stored, so what a tick is for is
-        // the redraw the edge performs around it. It gains work of its own
-        // with the alert ticket.
-        return state;
-    }
+    // Hydration is handed a value from storage rather than a state, so the
+    // alert is advanced over what came back rather than over what went in.
+    if (event === HYDRATE) return advanceAlert(hydrate(state, recipes, now), now);
+
+    return transition(advanceAlert(state, now), event, recipes, now);
   };
 }
