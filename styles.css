@@ -31,12 +31,18 @@ body {
   touch-action: none;
 }
 
+/* The padding and the gap are load-bearing rather than decorative: together
+   with the reserved timer and progress rows below they set the size of the
+   instruction pane, and therefore the character ceiling on step text. Both
+   numbers are mirrored in scripts/measure-step-ceiling.html, which is the
+   source of that ceiling. Change them there and here together, re-run the
+   harness, and re-pin MAX_STEP_CHARS. */
 .screen {
   width: 600px;
   height: 600px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   padding: 40px;
   overflow: hidden;
 }
@@ -49,6 +55,23 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
+}
+
+/* Label on the left, what is being cooked on the right, on one row. A second
+   row of header would come out of the ingredient list, which has none to give
+   on the longest recipe. */
+.header {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.header__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--content);
 }
 
 .title {
@@ -79,7 +102,8 @@ body {
   overflow: hidden;
 }
 
-.recipe {
+.recipe,
+.action {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -93,7 +117,8 @@ body {
 /* Focus is carried on three channels at once — the bar, the text brightness,
    and the weight — because a single one of them is easy to lose against a
    bright kitchen seen through an additive waveguide. */
-.recipe--focused {
+.recipe--focused,
+.action--focused {
   border-left-color: var(--accent);
   color: var(--content);
 }
@@ -109,5 +134,73 @@ body {
 
 .recipe__meta {
   font-size: 16px;
+  color: var(--dim);
+}
+
+/* The only control on the completion screen, and the last thing on it. */
+.action {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: auto;
+  flex: none;
+}
+
+/* Mise en place. Every ingredient is on screen at once; the list never scrolls
+   and never clips, which is a claim about the longest recipe and is held by
+   MAX_INGREDIENTS and MAX_INGREDIENT_CHARS in src/validate-recipe.js. Their
+   value comes from scripts/measure-ingredients-ceiling.html, which models this
+   geometry — change either and re-run it. */
+.ingredients {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  overflow: hidden;
+}
+
+.ingredient {
+  display: flex;
+  gap: 14px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+/* The quantities share a column so the list reads down as a checklist, and the
+   column never wraps: a wrapped quantity would cost the list a whole row. A
+   step smaller than the item it measures — it is the secondary half of the row,
+   and every pixel this column reserves is a pixel off the ceiling on how long
+   an item may be. */
+.ingredient__quantity {
+  flex: none;
+  min-width: 128px;
+  font-size: 18px;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+/* The cook screen. The timer row is reserved whether or not a timer is live,
+   so that starting one never reflows the instruction under a cook's eyes. */
+.timer {
+  height: 56px;
+  flex: none;
+  font-size: 28px;
+  color: var(--accent);
+}
+
+/* The instruction owns everything left over. */
+.instruction {
+  flex: 1 1 auto;
+  min-height: 0;
+  font-size: 40px;
+  line-height: 1.3;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.progress {
+  height: 28px;
+  flex: none;
+  font-size: 18px;
   color: var(--dim);
 }

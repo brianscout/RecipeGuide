@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   MAX_STEP_CHARS,
+  MAX_INGREDIENTS,
+  MAX_INGREDIENT_CHARS,
   validateRecipe,
   assertValidRecipe,
 } from '../src/validate-recipe.js';
@@ -81,6 +83,43 @@ test('over-length step text is rejected, naming the recipe and the step', () => 
   assert.match(message, /steps\[1\]\.text/);
   assert.match(message, new RegExp(String(MAX_STEP_CHARS + 1)));
   assert.match(message, new RegExp(String(MAX_STEP_CHARS)));
+});
+
+// The ingredients screen does not scroll either, and both of its ceilings are
+// measured by scripts/measure-ingredients-ceiling.html: one on how many rows
+// the pane holds, one on how wide a row can be before it wraps onto a second.
+
+// A quantity and an item, together `chars` long counting the space between.
+function ingredientOf(chars) {
+  return { quantity: '1 tsp', item: 'x'.repeat(chars - '1 tsp'.length - 1) };
+}
+
+test('an ingredient line exactly at the ceiling fits', () => {
+  const ingredients = [ingredientOf(MAX_INGREDIENT_CHARS)];
+  assert.deepEqual(validateRecipe(recipe({ ingredients })), []);
+});
+
+test('an over-wide ingredient is rejected, naming the recipe and the ingredient', () => {
+  const ingredients = [ingredientOf(MAX_INGREDIENT_CHARS), ingredientOf(MAX_INGREDIENT_CHARS + 1)];
+  const message = onlyError(recipe({ ingredients }));
+  assert.match(message, /test-recipe/);
+  assert.match(message, /ingredients\[1\]/);
+  assert.match(message, new RegExp(String(MAX_INGREDIENT_CHARS + 1)));
+  assert.match(message, new RegExp(String(MAX_INGREDIENT_CHARS)));
+});
+
+test('an ingredient list exactly at the ceiling fits', () => {
+  const ingredients = Array.from({ length: MAX_INGREDIENTS }, () => ingredientOf(20));
+  assert.deepEqual(validateRecipe(recipe({ ingredients })), []);
+});
+
+test('too many ingredients are rejected, naming the recipe and the count', () => {
+  const ingredients = Array.from({ length: MAX_INGREDIENTS + 1 }, () => ingredientOf(20));
+  const message = onlyError(recipe({ ingredients }));
+  assert.match(message, /test-recipe/);
+  assert.match(message, /ingredients/);
+  assert.match(message, new RegExp(String(MAX_INGREDIENTS + 1)));
+  assert.match(message, new RegExp(String(MAX_INGREDIENTS)));
 });
 
 test('a missing required field is rejected, naming the recipe and the field', () => {

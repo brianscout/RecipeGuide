@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
+import { MAX_INGREDIENTS } from '../src/validate-recipe.js';
+
 const RECIPES_DIR = fileURLToPath(new URL('../recipes/', import.meta.url));
 
 // index.json is the menu's running order, not a recipe. Every other file in
@@ -46,11 +48,13 @@ test('at least two recipes carry multiple timed steps', () => {
   assert.ok(multiple.length >= 2, `only ${multiple.length} recipe(s) have two or more timers`);
 });
 
-// The ingredients screen does not scroll either, and a list that fits is a
-// claim about the longest list in the corpus, not the average one.
-test('at least one recipe has twelve or more ingredients', () => {
+// The ingredients screen does not scroll either, and that it fits is a claim
+// about the longest list that can exist, not the longest that happens to be in
+// the corpus. The validator holds the ceiling; this holds a fixture at it, so
+// the screen is always drawn against its own worst case.
+test('a recipe sits at the ingredient ceiling', () => {
   const longest = Math.max(...recipes.map((r) => r.ingredients.length));
-  assert.ok(longest >= 12, `longest ingredient list is ${longest}`);
+  assert.equal(longest, MAX_INGREDIENTS, `longest ingredient list is ${longest}`);
 });
 
 // The ceiling forces short text; it does not force short *beats*. A step can

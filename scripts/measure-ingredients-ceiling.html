@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1, user-scalable=no">
+<title>Ingredient list measurement</title>
+<!-- The real stylesheet, not a copy of it: this harness is only honest about
+     the ingredients screen if it is measuring the same geometry the screen is
+     drawn with. -->
+<link rel="stylesheet" href="../styles.css">
+<style>
+  #report { position: fixed; left: 0; top: 0; visibility: hidden; white-space: pre; }
+</style>
+</head>
+<body>
+  <main class="screen">
+    <header class="header">
+      <p class="eyebrow">Ingredients</p>
+      <p class="header__title">Lemon Roast Chicken</p>
+    </header>
+    <ul class="ingredients" id="list"></ul>
+  </main>
+  <pre id="report"></pre>
+<script type="module">
+// Two numbers come out of this page, and the ingredients screen depends on
+// both. A list fits only if every row is one line AND there are few enough
+// rows, so a ceiling on either alone is not a ceiling.
+//
+//   MAX_INGREDIENT_CHARS  the longest "quantity item" that stays on one line
+//   MAX_INGREDIENTS       how many one-line rows fit the pane
+
+// Real ingredient prose, in the register the recipes are actually authored in.
+const CORPUS = [
+  { quantity: '1 small handful', item: 'flat-leaf parsley, chopped' },
+  { quantity: '4', item: 'spring onions, sliced on the diagonal' },
+  { quantity: '2 tsp', item: 'black peppercorns, coarsely cracked' },
+  { quantity: '800 g', item: 'chicken thighs, bone-in and skin-on' },
+  { quantity: '1 1/2 tsp', item: 'amchur, or the juice of half a lemon' },
+];
+// Widest realistic line: capitals are wider than lower case, and a ceiling
+// that only holds for narrow prose is not a ceiling.
+const WIDE = {
+  quantity: '1 Small Handful',
+  item: 'Wholemeal Sourdough Multiplied Throughout',
+};
+// The widest quantity the corpus holds, against the widest items: the column is
+// fixed, so a row is at its worst when the quantity fills it and the item is
+// wide too.
+
+const list = document.getElementById('list');
+
+function row({ quantity, item }) {
+  const node = document.createElement('li');
+  node.className = 'ingredient';
+  const q = document.createElement('span');
+  q.className = 'ingredient__quantity';
+  q.textContent = quantity;
+  const i = document.createElement('span');
+  i.className = 'ingredient__item';
+  i.textContent = item;
+  node.append(q, i);
+  return node;
+}
+
+function draw(ingredients) {
+  list.replaceChildren(...ingredients.map(row));
+}
+
+// One line, as the CSS draws it. Everything below is measured against this.
+draw([{ quantity: '1', item: 'salt' }]);
+const lineHeight = list.firstElementChild.getBoundingClientRect().height;
+
+// A line of exactly n characters counting the space between the two halves,
+// cut on word boundaries where the text allows so the measurement reflects how
+// the row actually wraps.
+function samples(n) {
+  return [...CORPUS, WIDE].flatMap(({ quantity, item }) => {
+    const room = n - quantity.length - 1;
+    if (room < 1) return [];
+    let text = item;
+    while (text.length < room) text += ' ' + item;
+    return [{ quantity, item: text.slice(0, room).trim().padEnd(room, 'x') }];
+  });
+}
+
+function staysOnOneLine(n) {
+  const rows = samples(n);
+  if (rows.length === 0) return false;
+  draw(rows);
+  return [...list.children].every(
+    (node) => node.getBoundingClientRect().height <= lineHeight + 0.5,
+  );
+}
+
+function search(fits, hi) {
+  let lo = 0;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+const chars = search(staysOnOneLine, 200);
+
+// The widest line that still fits, repeated: the tallest a legal list can be
+// per row is the worst case the pane has to hold.
+const widest = samples(chars).at(-1);
+const rows = search((n) => {
+  draw(Array.from({ length: n }, () => widest));
+  return list.scrollHeight <= list.clientHeight;
+}, 60);
+
+draw([]);
+const report = document.getElementById('report');
+report.textContent = JSON.stringify(
+  { paneWidth: list.clientWidth, paneHeight: list.clientHeight, lineHeight, chars, rows },
+  null,
+  2,
+);
+report.style.visibility = 'visible';
+</script>
+</body>
+</html>

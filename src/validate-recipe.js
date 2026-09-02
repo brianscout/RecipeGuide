@@ -9,6 +9,24 @@
  */
 export const MAX_STEP_CHARS = 150;
 
+/**
+ * The most ingredients a recipe can list. The screen shows the whole list at
+ * once and does not scroll, so a longer list would push its last rows off the
+ * bottom — content hidden rather than clipped, which is worse: the cook has no
+ * sign that anything is missing. Measured by
+ * scripts/measure-ingredients-ceiling.html, which found eighteen rows fit and
+ * is pinned one below.
+ */
+export const MAX_INGREDIENTS = 17;
+
+/**
+ * The most characters a quantity and item can run to together, counting the
+ * space between them. A row that wraps onto a second line costs the list a row
+ * it has not got. Measured by the same harness, which found forty-five fit on
+ * one line at the required type size.
+ */
+export const MAX_INGREDIENT_CHARS = 44;
+
 const RECIPE_FIELDS = ['id', 'title', 'servings', 'totalMinutes', 'ingredients', 'steps'];
 const INGREDIENT_FIELDS = ['quantity', 'item'];
 const STEP_FIELDS = ['text', 'minutes', 'timerLabel'];
@@ -50,6 +68,18 @@ function checkIngredient(errors, name, index, ingredient) {
   }
   checkText(errors, name, `${at}.quantity`, ingredient.quantity);
   checkText(errors, name, `${at}.item`, ingredient.item);
+
+  // The row is drawn as one line, so the two halves share the ceiling.
+  if (isText(ingredient.quantity) && isText(ingredient.item)) {
+    const width = ingredient.quantity.length + 1 + ingredient.item.length;
+    if (width > MAX_INGREDIENT_CHARS) {
+      errors.push(
+        `${name}: ${at} is ${width} characters of quantity and item, over the ` +
+          `${MAX_INGREDIENT_CHARS} character ceiling — it would wrap onto a second line`,
+      );
+    }
+  }
+
   checkUnknown(errors, name, `${at}.`, ingredient, INGREDIENT_FIELDS);
 }
 
@@ -123,6 +153,12 @@ export function validateRecipe(recipe) {
   checkCount(errors, name, 'servings', recipe.servings);
   checkCount(errors, name, 'totalMinutes', recipe.totalMinutes);
   checkList(errors, name, 'ingredients', recipe.ingredients, checkIngredient);
+  if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > MAX_INGREDIENTS) {
+    errors.push(
+      `${name}: ingredients has ${recipe.ingredients.length} entries, over the ` +
+        `${MAX_INGREDIENTS} the screen holds — the last of them would never be shown`,
+    );
+  }
   checkList(errors, name, 'steps', recipe.steps, checkStep);
   checkUnknown(errors, name, '', recipe, RECIPE_FIELDS);
   return errors;

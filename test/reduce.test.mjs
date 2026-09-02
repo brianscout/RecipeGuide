@@ -4,8 +4,11 @@ import assert from 'node:assert/strict';
 import {
   createReduce,
   initialState,
+  stepIndex,
   MENU,
   INGREDIENTS,
+  STEP,
+  DONE,
   SWIPE_LEFT,
   SWIPE_RIGHT,
   FOCUS_UP,
@@ -16,10 +19,34 @@ import {
 
 // The catalogue the reducer is bound to. Only the fields the menu reads are
 // exercised here; a full recipe is validated by validate-recipe, not by this.
+// Step counts differ on purpose: the flow's two boundaries sit one position
+// apart on a single-step recipe and far apart on a longer one, and both have to
+// hold.
 const CATALOGUE = [
-  { id: 'alpha', title: 'Alpha', servings: 2, totalMinutes: 20, ingredients: [], steps: [] },
-  { id: 'beta', title: 'Beta', servings: 4, totalMinutes: 35, ingredients: [], steps: [] },
-  { id: 'gamma', title: 'Gamma', servings: 1, totalMinutes: 10, ingredients: [], steps: [] },
+  {
+    id: 'alpha',
+    title: 'Alpha',
+    servings: 2,
+    totalMinutes: 20,
+    ingredients: [{ quantity: '1', item: 'thing' }],
+    steps: [{ text: 'Alpha one' }, { text: 'Alpha two' }, { text: 'Alpha three' }],
+  },
+  {
+    id: 'beta',
+    title: 'Beta',
+    servings: 4,
+    totalMinutes: 35,
+    ingredients: [{ quantity: '2', item: 'things' }],
+    steps: [{ text: 'Beta one' }],
+  },
+  {
+    id: 'gamma',
+    title: 'Gamma',
+    servings: 1,
+    totalMinutes: 10,
+    ingredients: [{ quantity: '3', item: 'things' }],
+    steps: [{ text: 'Gamma one' }, { text: 'Gamma two' }],
+  },
 ];
 
 // An arbitrary instant. Nothing in this ticket reads it, which is the point:
@@ -98,6 +125,142 @@ test('left from the ingredients returns to the menu', () => {
 
 test('returning to the menu leaves the abandoned recipe focused', () => {
   assert.equal(after([FOCUS_DOWN, FOCUS_DOWN, ACTIVATE, SWIPE_LEFT]).focus, 2);
+});
+
+// --- The flow -------------------------------------------------------------
+// menu <-> ingredients <-> step 1 <-> ... <-> step N <-> done, with left and
+// right carrying the same meaning on every one of those screens.
+
+const ALPHA = CATALOGUE[0];
+const BETA = CATALOGUE[1];
+
+// A cook who has just selected `id` and is looking at its ingredients.
+function onIngredients(id) {
+  const focus = CATALOGUE.findIndex((recipe) => recipe.id === id);
+  return reduce({ ...initialState(), focus }, ACTIVATE, NOW);
+}
+
+// The gestures a cook makes from that point, as a state.
+const cooking = (id, ...events) => after(events, { from: onIngredients(id) });
+
+const right = (count) => Array.from({ length: count }, () => SWIPE_RIGHT);
+
+test('right from the ingredients reaches the first step', () => {
+  const state = cooking('alpha', SWIPE_RIGHT);
+  assert.equal(state.screen, STEP);
+  assert.equal(state.position, 1);
+  assert.equal(stepIndex(state), 0);
+});
+
+test('right walks the steps in order', () => {
+  ALPHA.steps.forEach((_, index) => {
+    const state = cooking('alpha', ...right(index + 1));
+    assert.equal(state.screen, STEP);
+    assert.equal(stepIndex(state), index);
+  });
+});
+
+test('right from the last step reaches the completion screen', () => {
+  const state = cooking('alpha', ...right(ALPHA.steps.length + 1));
+  assert.equal(state.screen, DONE);
+  assert.equal(state.recipeId, 'alpha');
+});
+
+test('the flow ends at the completion screen', () => {
+  const done = cooking('alpha', ...right(ALPHA.steps.length + 1));
+  assert.equal(reduce(done, SWIPE_RIGHT, NOW), done);
+});
+
+test('left from the first step returns to the ingredients', () => {
+  const state = cooking('alpha', SWIPE_RIGHT, SWIPE_LEFT);
+  assert.equal(state.screen, INGREDIENTS);
+  assert.equal(state.position, 0);
+  assert.equal(state.recipeId, 'alpha');
+});
+
+test('left from a middle step goes back exactly one step', () => {
+  const state = cooking('alpha', SWIPE_RIGHT, SWIPE_RIGHT, SWIPE_RIGHT, SWIPE_LEFT);
+  assert.equal(stepIndex(state), 1);
+});
+
+test('left from the completion screen returns to the last step', () => {
+  const state = cooking('alpha', ...right(ALPHA.steps.length + 1), SWIPE_LEFT);
+  assert.equal(state.screen, STEP);
+  assert.equal(stepIndex(state), ALPHA.steps.length - 1);
+});
+
+// The shortest recipe the schema allows puts both boundaries one position
+// apart, which is where an off-by-one in either direction would show.
+test('a one-step recipe still has an ingredients screen and a completion screen', () => {
+  assert.equal(BETA.steps.length, 1);
+  assert.equal(cooking('beta').screen, INGREDIENTS);
+  assert.equal(stepIndex(cooking('beta', SWIPE_RIGHT)), 0);
+  assert.equal(cooking('beta', SWIPE_RIGHT, SWIPE_RIGHT).screen, DONE);
+  assert.equal(cooking('beta', SWIPE_RIGHT, SWIPE_RIGHT, SWIPE_LEFT).screen, STEP);
+});
+
+test('walking the whole flow out and back returns to where it started', () => {
+  const opened = onIngredients('alpha');
+  const there = right(ALPHA.steps.length + 1);
+  const back = there.map(() => SWIPE_LEFT);
+  assert.deepEqual(after([...there, ...back], { from: opened }), opened);
+});
+
+// The screen is what the render dispatches on and the position is what moves,
+// so a drift between them would show as the wrong screen at the right place.
+test('the screen always agrees with the position', () => {
+  const expected = [INGREDIENTS, ...ALPHA.steps.map(() => STEP), DONE];
+  expected.forEach((screen, position) => {
+    const state = cooking('alpha', ...right(position));
+    assert.equal(state.screen, screen, `position ${position}`);
+    assert.equal(state.position, position);
+  });
+});
+
+test('left from the ingredients is the only way out of a cook', () => {
+  // Every other position answers left by stepping back inside the recipe.
+  for (let position = 1; position <= ALPHA.steps.length + 1; position += 1) {
+    const state = cooking('alpha', ...right(position), SWIPE_LEFT);
+    assert.notEqual(state.screen, MENU, `position ${position}`);
+    assert.equal(state.recipeId, 'alpha');
+  }
+});
+
+// Secondary actions on a step arrive with timers. Until then the cook screen
+// has nothing to focus, and vertical input must not disturb the position.
+test('vertical input does nothing on the ingredients or on a step', () => {
+  for (const from of [cooking('alpha'), cooking('alpha', SWIPE_RIGHT)]) {
+    for (const event of [FOCUS_UP, FOCUS_DOWN]) {
+      assert.equal(reduce(from, event, NOW), from);
+    }
+  }
+});
+
+test('enter does nothing on the ingredients or on a step', () => {
+  for (const from of [cooking('alpha'), cooking('alpha', SWIPE_RIGHT)]) {
+    assert.equal(reduce(from, ACTIVATE, NOW), from);
+  }
+});
+
+test('enter on the completion screen returns to the menu, that recipe focused', () => {
+  const state = cooking('gamma', ...right(CATALOGUE[2].steps.length + 1), ACTIVATE);
+  assert.equal(state.screen, MENU);
+  assert.equal(state.recipeId, null);
+  assert.equal(state.position, 0);
+  assert.equal(state.focus, 2);
+});
+
+test('the supplied time does not change the outcome of a flow transition', () => {
+  const events = right(ALPHA.steps.length + 1);
+  const from = onIngredients('alpha');
+  assert.deepEqual(after(events, { from, now: 0 }), after(events, { from, now: NOW }));
+});
+
+test('the step index names the instruction on screen, and nothing elsewhere', () => {
+  assert.equal(stepIndex(initialState()), -1);
+  assert.equal(stepIndex(cooking('alpha')), -1);
+  assert.equal(stepIndex(cooking('alpha', ...right(ALPHA.steps.length + 1))), -1);
+  assert.equal(stepIndex(cooking('alpha', SWIPE_RIGHT, SWIPE_RIGHT)), 1);
 });
 
 test('a menu with one recipe holds its focus in both directions', () => {

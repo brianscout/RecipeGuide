@@ -48,13 +48,29 @@ it shows what pure black actually looks like on the waveguide.
 ## Recipes
 
 One JSON file per recipe in `recipes/`, deployed as authored. The schema, the
-150 character ceiling on step text, and how that number was measured are in
+150 character ceiling on step text, the two ceilings on the ingredient list, and
+how each of those numbers was measured are in
 [docs/RECIPE-SCHEMA.md](docs/RECIPE-SCHEMA.md). Every recipe in the folder is
 validated by the test run, so a malformed one cannot reach a deploy.
 
-The ceiling is re-measured, not re-guessed, whenever the cook screen changes:
-serve the repository and open
-`http://localhost:8000/scripts/measure-step-ceiling.html`.
+`recipes/index.json` is the menu's running order: an array of recipe ids, each
+naming a sibling file, ordered by total time so the menu opens on the
+quickest thing to cook. Static hosting cannot list a directory, so adding a
+recipe means adding the file and adding its id here. The test run asserts the
+manifest and the folder agree, so a recipe listed in neither order nor place
+fails at the desk rather than silently never appearing on the glasses.
+
+The five shipped recipes are also the fixture set for the screens, so they are
+chosen to span the constraints rather than to be five of the same shape: a
+four-ingredient cook that is over in eight beats, a seventeen-ingredient one
+that runs to thirteen, and four with concurrent timers. `test/recipes.test.mjs`
+holds that spread in place.
+
+The ceilings are re-measured, not re-guessed, whenever the screens they come
+from change: serve the repository and open
+`http://localhost:8000/scripts/measure-step-ceiling.html` for the cook screen
+and `http://localhost:8000/scripts/measure-ingredients-ceiling.html` for the
+ingredient list.
 
 ## Tests
 
