@@ -1,25 +1,52 @@
-// Walking skeleton. No application state and no flow: this module exists to
-// prove that ES modules load from GitHub Pages on the glasses and that the
-// five platform inputs reach page code. It is replaced by the real entry
-// point once the reducer lands.
+// The entry point, and the only module that touches the browser directly.
+// It wires three edges around the pure core: loading recipes, translating
+// keydown into events, and drawing the resulting state.
+//
+// The glasses OS translates the Neural Band and the temple touch strip into
+// arrow keys and Enter. Those five keys are the entire input vocabulary, and
+// this listener is the whole of the application's input handling.
 
-const INPUTS = {
-  ArrowLeft: 'Swipe left',
-  ArrowRight: 'Swipe right',
-  ArrowUp: 'Focus up',
-  ArrowDown: 'Focus down',
-  Enter: 'Pinch',
+import { loadRecipes } from './load-recipes.js';
+import { render, renderError } from './render.js';
+import {
+  createReduce,
+  initialState,
+  SWIPE_LEFT,
+  SWIPE_RIGHT,
+  FOCUS_UP,
+  FOCUS_DOWN,
+  ACTIVATE,
+} from './reduce.js';
+
+const KEYS = {
+  ArrowLeft: SWIPE_LEFT,
+  ArrowRight: SWIPE_RIGHT,
+  ArrowUp: FOCUS_UP,
+  ArrowDown: FOCUS_DOWN,
+  Enter: ACTIVATE,
 };
 
-const readout = document.getElementById('readout');
+const root = document.getElementById('app');
+
+let recipes;
+try {
+  recipes = await loadRecipes();
+} catch (error) {
+  renderError(root, error);
+  throw error;
+}
+
+const reduce = createReduce(recipes);
+let state = initialState();
+render(root, state, recipes);
 
 document.addEventListener('keydown', (event) => {
-  const label = INPUTS[event.key];
-  if (!label) return;
+  const application = KEYS[event.key];
+  if (!application) return;
   event.preventDefault();
-  readout.textContent = label;
-  readout.classList.remove('readout--dim');
-});
 
-readout.textContent = 'Ready';
-readout.classList.add('readout--dim');
+  const next = reduce(state, application, Date.now());
+  if (next === state) return;
+  state = next;
+  render(root, state, recipes);
+});

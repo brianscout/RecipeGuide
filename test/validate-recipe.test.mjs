@@ -37,12 +37,35 @@ test('a well-formed recipe produces no errors', () => {
   assert.deepEqual(validateRecipe(recipe()), []);
 });
 
+// index.json is the menu's running order, not a recipe. Every other file in
+// the folder is one.
+async function recipeFiles() {
+  const files = await readdir(RECIPES_DIR);
+  return files.filter((name) => name.endsWith('.json') && name !== 'index.json');
+}
+
+const readJson = async (file) => JSON.parse(await readFile(RECIPES_DIR + file, 'utf8'));
+
 test('every recipe shipped in the repository is valid', async () => {
-  const files = (await readdir(RECIPES_DIR)).filter((name) => name.endsWith('.json'));
+  const files = await recipeFiles();
   assert.ok(files.length > 0, 'no recipes found to validate');
   for (const file of files) {
-    const parsed = JSON.parse(await readFile(RECIPES_DIR + file, 'utf8'));
-    assert.deepEqual(validateRecipe(parsed), [], `${file} is invalid`);
+    assert.deepEqual(validateRecipe(await readJson(file)), [], `${file} is invalid`);
+  }
+});
+
+// Static hosting cannot list a directory, so the menu reads this manifest
+// instead. A recipe added to the folder and forgotten here would simply never
+// appear on the glasses, with nothing to notice at the desk.
+test('the manifest lists exactly the recipes in the folder', async () => {
+  const listed = await readJson('index.json');
+  const present = (await recipeFiles()).map((file) => file.replace(/\.json$/, ''));
+  assert.deepEqual([...listed].sort(), present.sort());
+});
+
+test('each manifest entry matches the id inside its recipe', async () => {
+  for (const id of await readJson('index.json')) {
+    assert.equal((await readJson(`${id}.json`)).id, id);
   }
 });
 

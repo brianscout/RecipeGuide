@@ -36,38 +36,78 @@ body {
   height: 600px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
+  gap: 20px;
   padding: 40px;
-  text-align: center;
+  overflow: hidden;
+}
+
+/* A screen's label, small and dim: the instruction or the list is the content,
+   and the header should not compete with it for light. */
+.eyebrow {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
 }
 
 .title {
-  font-size: 56px;
+  font-size: 44px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--content);
 }
 
-.subtitle {
-  font-size: 24px;
-  font-weight: 600;
+.hint,
+.notice {
+  font-size: 20px;
+  color: var(--dim);
+}
+
+.notice {
   color: var(--accent);
 }
 
-.hint {
-  font-size: 20px;
+.menu {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  /* Five recipes ship, and the display does not scroll. Anything that does not
+     fit is hidden rather than reachable, so the list is kept short by hand. */
+  overflow: hidden;
+}
+
+.recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0 10px 20px;
+  /* The bar is always present so that focus moves the eye rather than the row:
+     unfocused it is absent light, focused it is the brightest thing on screen. */
+  border-left: 6px solid var(--ground);
+  color: var(--dim);
+}
+
+/* Focus is carried on three channels at once — the bar, the text brightness,
+   and the weight — because a single one of them is easy to lose against a
+   bright kitchen seen through an additive waveguide. */
+.recipe--focused {
+  border-left-color: var(--accent);
   color: var(--content);
 }
 
-.readout {
-  font-size: 20px;
+.recipe__title {
+  font-size: 28px;
   font-weight: 600;
-  color: var(--accent);
-  min-height: 28px;
 }
 
-.readout--dim {
+.recipe--focused .recipe__title {
+  font-weight: 700;
+}
+
+.recipe__meta {
+  font-size: 16px;
   color: var(--dim);
 }
