@@ -16,6 +16,7 @@ import {
   FOCUS_UP,
   FOCUS_DOWN,
   ACTIVATE,
+  TICK,
 } from './reduce.js';
 
 const KEYS = {
@@ -36,9 +37,38 @@ try {
   throw error;
 }
 
+// A second is the coarsest interval a countdown reading in seconds can be
+// redrawn on and still be right.
+const TICK_MS = 1000;
+
 const reduce = createReduce(recipes);
 let state = initialState();
-render(root, state, recipes);
+let ticking = null;
+
+const draw = () => render(root, state, recipes, Date.now());
+
+// Nothing in state changes as a second passes — a timer holds the instant it
+// ends, and its remaining time is derived at the draw — so the tick redraws
+// unconditionally where a gesture redraws only on a change.
+function tick() {
+  state = reduce(state, TICK, Date.now());
+  draw();
+  syncTicking();
+}
+
+// The interval runs only while there is a countdown to count down. A device
+// worn on the face should not be redrawing a still screen once a second.
+function syncTicking() {
+  const wanted = state.timers.length > 0;
+  if (wanted === (ticking !== null)) return;
+  if (wanted) ticking = setInterval(tick, TICK_MS);
+  else {
+    clearInterval(ticking);
+    ticking = null;
+  }
+}
+
+draw();
 
 document.addEventListener('keydown', (event) => {
   const application = KEYS[event.key];
@@ -48,5 +78,6 @@ document.addEventListener('keydown', (event) => {
   const next = reduce(state, application, Date.now());
   if (next === state) return;
   state = next;
-  render(root, state, recipes);
+  draw();
+  syncTicking();
 });

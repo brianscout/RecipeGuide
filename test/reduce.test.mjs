@@ -15,6 +15,8 @@ import {
   FOCUS_DOWN,
   ACTIVATE,
   TICK,
+  timersAt,
+  timerOffer,
 } from '../src/reduce.js';
 
 // The catalogue the reducer is bound to. Only the fields the menu reads are
@@ -39,13 +41,18 @@ const CATALOGUE = [
     ingredients: [{ quantity: '2', item: 'things' }],
     steps: [{ text: 'Beta one' }],
   },
+  // The only one carrying durations, so that a step with no timer and a step
+  // with one are both in the catalogue and neither has to be simulated.
   {
     id: 'gamma',
     title: 'Gamma',
     servings: 1,
-    totalMinutes: 10,
+    totalMinutes: 30,
     ingredients: [{ quantity: '3', item: 'things' }],
-    steps: [{ text: 'Gamma one' }, { text: 'Gamma two' }],
+    steps: [
+      { text: 'Gamma one', minutes: 20, timerLabel: 'Simmer' },
+      { text: 'Gamma two', minutes: 5, timerLabel: 'Rest' },
+    ],
   },
 ];
 
@@ -236,7 +243,7 @@ test('vertical input does nothing on the ingredients or on a step', () => {
   }
 });
 
-test('enter does nothing on the ingredients or on a step', () => {
+test('enter does nothing on the ingredients, or on a step with no duration', () => {
   for (const from of [cooking('alpha'), cooking('alpha', SWIPE_RIGHT)]) {
     assert.equal(reduce(from, ACTIVATE, NOW), from);
   }
@@ -284,6 +291,212 @@ test('the supplied time does not change the outcome of a menu transition', () =>
   const early = after(events, { now: 0 });
   const late = after(events, { now: NOW + 6 * 60 * 60 * 1000 });
   assert.deepEqual(early, late);
+});
+
+// --- Timers ---------------------------------------------------------------
+// Timers are global rather than scoped to the step that started them, and each
+// is stored as the instant it ends rather than as a counter. Every assertion
+// below drives a twenty minute duration by passing a second timestamp: no fake
+// timers, no clock mocking, and nothing waits.
+
+const MINUTE = 60 * 1000;
+const later = (minutes) => NOW + minutes * MINUTE;
+
+// A cook looking at Gamma's first step, which offers a twenty minute simmer.
+const onTimerStep = () => cooking('gamma', SWIPE_RIGHT);
+
+test('a step carrying a duration offers a timer, showing its length', () => {
+  const offer = timerOffer(onTimerStep(), CATALOGUE, NOW);
+  assert.equal(offer.label, 'Simmer');
+  assert.equal(offer.minutes, 20);
+});
+
+test('offering a timer does not start one', () => {
+  assert.deepEqual(onTimerStep().timers, []);
+});
+
+test('a step with no duration offers nothing', () => {
+  assert.equal(timerOffer(cooking('alpha', SWIPE_RIGHT), CATALOGUE, NOW), null);
+});
+
+test('no screen outside a step offers a timer', () => {
+  const done = cooking('gamma', SWIPE_RIGHT, SWIPE_RIGHT, SWIPE_RIGHT);
+  for (const state of [initialState(), cooking('gamma'), done]) {
+    assert.equal(timerOffer(state, CATALOGUE, NOW), null, state.screen);
+  }
+});
+
+test('enter starts the timer the step offers', () => {
+  const state = reduce(onTimerStep(), ACTIVATE, NOW);
+  assert.equal(state.timers.length, 1);
+  assert.equal(state.timers[0].label, 'Simmer');
+});
+
+test('starting a timer leaves the cook on the step they started it from', () => {
+  const before = onTimerStep();
+  const started = reduce(before, ACTIVATE, NOW);
+  assert.equal(started.screen, before.screen);
+  assert.equal(started.position, before.position);
+  assert.equal(started.recipeId, before.recipeId);
+});
+
+test('a timer is stored as the instant it ends, not as a counter', () => {
+  const [timer] = reduce(onTimerStep(), ACTIVATE, NOW).timers;
+  assert.equal(timer.endsAt, later(20));
+  // Nothing on a timer decrements, so nothing on it can fall out of date while
+  // the application is not running.
+  assert.deepEqual(Object.keys(timer).sort(), ['endsAt', 'id', 'label', 'sourceStep']);
+});
+
+test('the same start at two different instants ends twenty minutes after each', () => {
+  const from = onTimerStep();
+  assert.equal(reduce(from, ACTIVATE, NOW).timers[0].endsAt, NOW + 20 * MINUTE);
+  assert.equal(reduce(from, ACTIVATE, 0).timers[0].endsAt, 0 + 20 * MINUTE);
+});
+
+test('remaining time is derived from the clock the reducer is passed', () => {
+  const state = reduce(onTimerStep(), ACTIVATE, NOW);
+  assert.equal(timersAt(state, NOW)[0].remainingMs, 20 * MINUTE);
+  assert.equal(timersAt(state, later(12))[0].remainingMs, 8 * MINUTE);
+  assert.equal(timersAt(state, later(19.5))[0].remainingMs, 30 * 1000);
+  assert.equal(timersAt(state, later(12))[0].finished, false);
+});
+
+test('a timer reads as finished once its instant has passed', () => {
+  const state = reduce(onTimerStep(), ACTIVATE, NOW);
+  for (const minutes of [20, 25, 600]) {
+    const [timer] = timersAt(state, later(minutes));
+    assert.equal(timer.finished, true, `${minutes} minutes in`);
+    // Never a negative countdown: overdue is overdue.
+    assert.equal(timer.remainingMs, 0);
+  }
+});
+
+test('a running timer keeps counting through every navigation', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const walked = after([SWIPE_RIGHT, SWIPE_RIGHT, SWIPE_LEFT, SWIPE_LEFT], { from: started });
+  assert.equal(timersAt(walked, later(5))[0].remainingMs, 15 * MINUTE);
+});
+
+test('a running timer survives abandoning the cook for the menu', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const menu = after([SWIPE_LEFT, SWIPE_LEFT], { from: started });
+  assert.equal(menu.screen, MENU);
+  assert.equal(menu.recipeId, null);
+  assert.equal(timersAt(menu, later(5))[0].label, 'Simmer');
+  assert.equal(timersAt(menu, later(5))[0].remainingMs, 15 * MINUTE);
+});
+
+test('a running timer survives starting a different recipe', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  // Down from the abandoned Gamma wraps round the catalogue to Alpha.
+  const elsewhere = after([SWIPE_LEFT, SWIPE_LEFT, FOCUS_DOWN, ACTIVATE], { from: started });
+  assert.equal(elsewhere.recipeId, 'alpha');
+  assert.equal(timersAt(elsewhere, later(5)).length, 1);
+});
+
+// Two timers, started five minutes apart, are what the indicator has to keep
+// apart on screen: same shape, different labels, different instants.
+function twoRunning() {
+  const first = reduce(onTimerStep(), ACTIVATE, NOW);
+  const secondStep = reduce(first, SWIPE_RIGHT, NOW);
+  return reduce(secondStep, ACTIVATE, later(5));
+}
+
+test('several timers run at once, each labelled with what it is for', () => {
+  assert.deepEqual(
+    twoRunning().timers.map((timer) => timer.label),
+    ['Simmer', 'Rest'],
+  );
+});
+
+test('concurrent timers each report their own remaining time', () => {
+  const [rest, simmer] = timersAt(twoRunning(), later(8));
+  assert.equal(simmer.label, 'Simmer');
+  assert.equal(simmer.remainingMs, 12 * MINUTE);
+  assert.equal(rest.label, 'Rest');
+  assert.equal(rest.remainingMs, 2 * MINUTE);
+});
+
+test('concurrent timers finish independently', () => {
+  const state = twoRunning();
+  const finished = (now) =>
+    timersAt(state, now)
+      .filter((timer) => timer.finished)
+      .map((timer) => timer.label);
+  assert.deepEqual(finished(later(8)), []);
+  assert.deepEqual(finished(later(10)), ['Rest']);
+  assert.deepEqual(finished(later(20)), ['Rest', 'Simmer']);
+});
+
+// Soonest first, so the timer nearest to needing attention is the one the row
+// shows when there is not room for all of them.
+test('timers are ordered by the instant they end', () => {
+  assert.deepEqual(
+    timersAt(twoRunning(), later(8)).map((timer) => timer.label),
+    ['Rest', 'Simmer'],
+  );
+});
+
+test('a step whose timer is already running does not offer another', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  assert.equal(timerOffer(started, CATALOGUE, later(19)), null);
+  assert.equal(reduce(started, ACTIVATE, later(19)), started);
+});
+
+test('coming back to a step whose timer is running does not offer another', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const returned = after([SWIPE_RIGHT, SWIPE_LEFT], { from: started });
+  assert.equal(timerOffer(returned, CATALOGUE, later(19)), null);
+});
+
+// A finished timer is spent, and a cook who wants that simmer again should not
+// have to reach for a phone.
+test('a step offers its timer again once that timer has finished', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  assert.equal(timerOffer(started, CATALOGUE, later(20)).label, 'Simmer');
+  const restarted = reduce(started, ACTIVATE, later(20));
+  assert.equal(restarted.timers.length, 2);
+  assert.equal(timersAt(restarted, later(20))[1].remainingMs, 20 * MINUTE);
+});
+
+// A timer outlives the recipe it was started in, so what a timer was started
+// from has to name the recipe as well as the step. Two recipes whose timers
+// sit at the same step index are where that would show.
+test('a timer running in one recipe does not suppress the offer in another', () => {
+  const twins = [CATALOGUE[2], { ...CATALOGUE[2], id: 'delta', title: 'Delta' }];
+  const reduceTwins = createReduce(twins);
+  const started = after([ACTIVATE, SWIPE_RIGHT, ACTIVATE], { reducer: reduceTwins });
+  assert.equal(started.recipeId, 'gamma');
+  assert.equal(started.timers.length, 1);
+
+  const inDelta = after([SWIPE_LEFT, SWIPE_LEFT, FOCUS_DOWN, ACTIVATE, SWIPE_RIGHT], {
+    from: started,
+    reducer: reduceTwins,
+  });
+  assert.equal(inDelta.recipeId, 'delta');
+  assert.equal(timerOffer(inDelta, twins, NOW).label, 'Simmer');
+});
+
+test('every timer carries an id of its own', () => {
+  const ids = twoRunning().timers.map((timer) => timer.id);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('starting a timer does not mutate the state it started from', () => {
+  const before = deepFreeze(onTimerStep());
+  const started = reduce(before, ACTIVATE, NOW);
+  assert.deepEqual(before.timers, []);
+  assert.equal(started.timers.length, 1);
+});
+
+test('deriving remaining time does not mutate the state it reads', () => {
+  const state = deepFreeze(twoRunning());
+  timersAt(state, later(8));
+  assert.deepEqual(
+    state.timers.map((timer) => timer.label),
+    ['Simmer', 'Rest'],
+  );
 });
 
 test('the reducer does not mutate the state it is given', () => {

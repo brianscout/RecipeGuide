@@ -48,8 +48,10 @@ body {
 }
 
 /* A screen's label, small and dim: the instruction or the list is the content,
-   and the header should not compete with it for light. */
-.eyebrow {
+   and the header should not compete with it for light. A timer's label is the
+   same thing in the same place, so it is drawn the same way. */
+.eyebrow,
+.timers__label {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -68,7 +70,11 @@ body {
   gap: 20px;
 }
 
+/* Never shrinks and never wraps: a second row of header would come out of the
+   list below it, and the timer indicator beside it gives way instead. */
 .header__title {
+  flex: none;
+  white-space: nowrap;
   font-size: 20px;
   font-weight: 600;
   color: var(--content);
@@ -184,8 +190,67 @@ body {
 .timer {
   height: 56px;
   flex: none;
-  font-size: 28px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* The timer indicator, which takes the top row of every screen while anything
+   is running: on a step the reserved row above, elsewhere the screen's label.
+   One line and never two — the row it takes is the only row the panes below it
+   have to give. What does not fit is counted by .timers__more rather than
+   dropped. */
+.timers {
+  display: flex;
+  /* Sized by what is in it and no more. On three of the four screens it is a
+     row inside a column, where growing would take the pane below it; on the
+     fourth it gives way before the header title beside it. */
+  min-width: 0;
+  align-items: baseline;
+  gap: 24px;
+  overflow: hidden;
+}
+
+.timers__timer {
+  display: flex;
+  /* Never squashed to fit: a clipped label is a timer a cook cannot identify,
+     and how many fit is settled by MAX_TIMERS_SHOWN in src/render.js rather
+     than by the flexbox. */
+  flex: none;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.timers__value {
+  font-size: 26px;
+  font-weight: 600;
   color: var(--accent);
+  /* Digits of one width, so a counting timer does not shove the row beside it
+     once a second. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* The offer wears the bar of a focused menu row, because a pinch operates it
+   and a pinch operates those. */
+.timers__timer--offer {
+  padding-left: 14px;
+  border-left: 6px solid var(--accent);
+}
+
+.timers__timer--offer .timers__label {
+  color: var(--content);
+}
+
+/* Finished is the brightest thing in the row: it is the one that wants a
+   cook's attention. */
+.timers__timer--finished .timers__value {
+  color: var(--content);
+}
+
+.timers__more {
+  font-size: 16px;
+  color: var(--dim);
 }
 
 /* The instruction owns everything left over. */

@@ -99,10 +99,92 @@ export function stepIndex(state) {
   return state.screen === STEP ? state.position - 1 : -1;
 }
 
+// --- Timers ---------------------------------------------------------------
+// Timers are global rather than scoped to the step that started them. Start a
+// simmer at step three, walk forward to step six to prep a garnish, and the
+// simmer is still counting. A timer that died on a swipe would put the cook
+// back to tracking time in their head, which is the thing that sends them to
+// a phone.
+//
+// Each timer stores the absolute instant it ends and never a decrementing
+// counter, so remaining time is derived by subtracting the supplied clock.
+// That is what makes a timer correct across a reload or any suspension the
+// platform imposes without the application having to detect that either
+// happened — and the platform's suspension behaviour is an open question.
+
+const MINUTE_MS = 60 * 1000;
+
+// A timer outlives the recipe it was started in, so what started it has to
+// name the recipe as well as the step: two recipes both carrying a timer at
+// step three must not be mistaken for one another.
+const sourceStepOf = (recipe, index) => `${recipe.id}:${index}`;
+
+/**
+ * Every timer with its remaining time derived from `now`, soonest to end
+ * first, so the one nearest to needing attention leads the indicator.
+ *
+ * A finished timer stays in the list and simply reads as finished. What
+ * happens on the instant it expires — the takeover, its decay, and being
+ * acknowledged — arrives with the alert ticket, and is the one part of a
+ * timer that the clock cannot derive.
+ *
+ * @param {object} state
+ * @param {number} now
+ * @returns {Array<{ id: string, label: string, endsAt: number, remainingMs: number, finished: boolean }>}
+ */
+export function timersAt(state, now) {
+  return state.timers
+    .map((timer) => ({
+      ...timer,
+      // Overdue is overdue: a countdown never goes negative.
+      remainingMs: Math.max(0, timer.endsAt - now),
+      finished: timer.endsAt <= now,
+    }))
+    .sort((a, b) => a.endsAt - b.endsAt);
+}
+
+/**
+ * The timer the current step offers, or null where there is none to offer.
+ * A step carrying a duration offers one, unless the timer it already started
+ * is still running — a second identical pasta timer from a stray pinch is a
+ * nuisance, and a spent one is worth being able to start again.
+ *
+ * @param {object} state
+ * @param {Array<object>} recipes
+ * @param {number} now
+ * @returns {{ sourceStep: string, label: string, minutes: number } | null}
+ */
+export function timerOffer(state, recipes, now) {
+  const recipe = currentRecipe(state, recipes);
+  const index = stepIndex(state);
+  const step = index === -1 ? undefined : recipe?.steps[index];
+  if (!step?.minutes) return null;
+
+  const sourceStep = sourceStepOf(recipe, index);
+  const running = state.timers.some((timer) => timer.sourceStep === sourceStep && timer.endsAt > now);
+  return running ? null : { sourceStep, label: step.timerLabel, minutes: step.minutes };
+}
+
+function startTimer(state, recipes, now) {
+  const offer = timerOffer(state, recipes, now);
+  // No duration on this step, or its timer is already running. Returning the
+  // same state is what lets the edges skip a redraw.
+  if (!offer) return state;
+
+  const endsAt = now + offer.minutes * MINUTE_MS;
+  const timer = {
+    id: `${offer.sourceStep}@${endsAt}`,
+    label: offer.label,
+    endsAt,
+    sourceStep: offer.sourceStep,
+  };
+  return { ...state, timers: [...state.timers, timer] };
+}
+
 // Focus cycles among the focusable elements of the current screen. The menu's
 // are its recipes; the completion screen's is its one way back to them. The
-// ingredients and the step screens have none — the step screen grows its
-// secondary actions when timers land.
+// ingredients screen has none, and a step has at most one — the timer it
+// offers — so there is never anything for vertical input to move to.
 function focusableCount(state, recipes) {
   if (state.screen === MENU) return recipes.length;
   return state.screen === DONE ? 1 : 0;
@@ -127,8 +209,11 @@ function toMenu(state, recipes) {
   return { ...initialState(), timers: state.timers, alert: state.alert, focus };
 }
 
-function activate(state, recipes) {
+function activate(state, recipes, now) {
   if (state.screen === DONE) return toMenu(state, recipes);
+  // The one action a step ever offers is the timer it carries, so a pinch
+  // there means starting it and means nothing else.
+  if (state.screen === STEP) return startTimer(state, recipes, now);
   if (state.screen !== MENU) return state;
   const recipe = recipes[state.focus];
   if (!recipe) return state;
@@ -175,14 +260,16 @@ export function createReduce(recipes) {
       case FOCUS_DOWN:
         return moveFocus(state, recipes, +1);
       case ACTIVATE:
-        return activate(state, recipes);
+        return activate(state, recipes, now);
       case SWIPE_LEFT:
         return move(state, recipes, -1);
       case SWIPE_RIGHT:
         return move(state, recipes, +1);
       default:
-        // TICK and HYDRATE arrive with the tickets that give them meaning:
-        // timers and resume.
+        // A tick moves nothing here. A running timer's remaining time is
+        // derived from the clock rather than stored, so what a tick is for is
+        // the redraw the edge performs around it. It gains work of its own
+        // with the alert ticket, and HYDRATE with resume.
         return state;
     }
   };
