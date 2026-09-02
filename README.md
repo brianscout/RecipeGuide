@@ -72,6 +72,27 @@ from change: serve the repository and open
 and `http://localhost:8000/scripts/measure-ingredients-ceiling.html` for the
 ingredient list.
 
+## Resuming a session
+
+The session — the recipe, the position, and the timer list — is written to local
+storage under `recipeguide:session` on every state change, and picked up again
+on load. There is no resume prompt: making a cook perform a gesture to get back
+to a place the application already knows is the friction this exists to remove.
+The way out of an unwanted resume is the navigation that is already there, left
+from the ingredients to the menu.
+
+Timers hold the instant they end rather than a counter, so resuming is
+arithmetic: one whose instant passed while the app was not running comes back
+fired rather than with stale time on the clock. A session written more than six
+hours ago is discarded and the menu opens instead — long enough to survive a
+slow braise, short enough that yesterday's dinner never appears at breakfast.
+
+This is also the mitigation for the platform's undocumented suspension
+behaviour: if the glasses kill the page mid-cook, this is what makes that
+survivable. To exercise it by hand, start a timer, reload the window, and check
+the countdown against a clock; `localStorage.clear()` in the console is the
+reset.
+
 ## Tests
 
 ```bash

@@ -15,6 +15,7 @@ import {
   FOCUS_DOWN,
   ACTIVATE,
   TICK,
+  HYDRATE,
   timersAt,
   timerOffer,
 } from '../src/reduce.js';
@@ -498,6 +499,152 @@ test('deriving remaining time does not mutate the state it reads', () => {
     ['Simmer', 'Rest'],
   );
 });
+
+// --- Hydration ------------------------------------------------------------
+// A reload mid-cook is the case this section is about, and on this platform it
+// is not an edge case: the glasses may suspend or kill the page at any moment.
+// The persisted value is a state carrying the instant it was written, so
+// hydration is arithmetic on two timestamps rather than a guess, and the
+// decision it takes — resume or discard — is taken here rather than at the
+// edge that reads storage.
+
+const HOUR = 60 * MINUTE;
+
+// A session written `hoursAgo` before the clock hydration is given.
+const saved = (state, hoursAgo) => ({ ...state, savedAt: NOW - hoursAgo * HOUR });
+
+const hydrate = (persisted, now = NOW) => reduce(persisted, HYDRATE, now);
+
+test('nothing persisted opens the menu', () => {
+  assert.deepEqual(hydrate(null), initialState());
+});
+
+test('a persisted session returns the cook to their exact step', () => {
+  const cooking = after(right(2), { from: onIngredients('alpha') });
+  const resumed = hydrate(saved(cooking, 1));
+  assert.equal(resumed.screen, STEP);
+  assert.equal(resumed.recipeId, 'alpha');
+  assert.equal(resumed.position, 2);
+  assert.equal(stepIndex(resumed), 1);
+});
+
+test('hydration leaves no trace of the write behind in state', () => {
+  const resumed = hydrate(saved(onIngredients('alpha'), 1));
+  assert.equal('savedAt' in resumed, false);
+});
+
+test('a session written just inside six hours is resumed', () => {
+  const resumed = hydrate(saved(onIngredients('alpha'), 6));
+  assert.equal(resumed.screen, INGREDIENTS);
+  assert.equal(resumed.recipeId, 'alpha');
+});
+
+test('a session written just outside six hours is discarded', () => {
+  const persisted = { ...onIngredients('alpha'), savedAt: NOW - 6 * HOUR - 1 };
+  assert.deepEqual(hydrate(persisted), initialState());
+});
+
+test('a session written at an instant in the future is discarded', () => {
+  assert.deepEqual(hydrate(saved(onIngredients('alpha'), -1)), initialState());
+});
+
+test('a session with no record of when it was written is discarded', () => {
+  assert.deepEqual(hydrate(onIngredients('alpha')), initialState());
+});
+
+test('a hydrated timer reports its remaining time against the real clock', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  // Written the instant it started, hydrated eight minutes later.
+  const resumed = hydrate({ ...started, savedAt: NOW }, later(8));
+  const [timer] = timersAt(resumed, later(8));
+  assert.equal(timer.remainingMs, 12 * MINUTE);
+  assert.equal(timer.finished, false);
+});
+
+test('a timer whose instant passed while the app was closed reads as fired', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const resumed = hydrate({ ...started, savedAt: NOW }, later(25));
+  const [timer] = timersAt(resumed, later(25));
+  assert.equal(timer.finished, true);
+  assert.equal(timer.remainingMs, 0);
+});
+
+test('a hydrated timer is not resurrected with stale time on the clock', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const resumed = hydrate({ ...started, savedAt: NOW }, later(25));
+  assert.deepEqual(
+    resumed.timers.map((timer) => timer.endsAt),
+    started.timers.map((timer) => timer.endsAt),
+  );
+});
+
+// The escape hatch from an unwanted resume is the navigation that already
+// exists, which is only true if a hydrated state moves like any other.
+test('left from the ingredients still exits to the menu after a resume', () => {
+  const resumed = hydrate(saved(onIngredients('beta'), 1));
+  const state = reduce(resumed, SWIPE_LEFT, NOW);
+  assert.equal(state.screen, MENU);
+  assert.equal(state.recipeId, null);
+});
+
+test('a resumed cook walks the flow from where it was left', () => {
+  const resumed = hydrate(saved(after(right(2), { from: onIngredients('alpha') }), 1));
+  const state = reduce(resumed, SWIPE_RIGHT, NOW);
+  assert.equal(state.position, 3);
+  assert.equal(stepIndex(state), 2);
+});
+
+test('a session naming a recipe the catalogue no longer carries is discarded', () => {
+  const persisted = saved({ ...onIngredients('alpha'), recipeId: 'deleted' }, 1);
+  assert.deepEqual(hydrate(persisted), initialState());
+});
+
+test('a persisted menu keeps the timers running in it', () => {
+  const left = [SWIPE_LEFT, SWIPE_LEFT, SWIPE_LEFT];
+  const abandoned = after(left, { from: twoRunning(), now: later(5) });
+  const resumed = hydrate(saved(abandoned, 1));
+  assert.equal(resumed.screen, MENU);
+  assert.deepEqual(
+    resumed.timers.map((timer) => timer.label),
+    ['Simmer', 'Rest'],
+  );
+});
+
+// A recipe edited between sessions is the ordinary way a persisted position
+// stops meaning what it meant, and the flow has to hold anyway.
+test('a position past the end of a shortened recipe lands on the completion screen', () => {
+  const persisted = saved({ ...onIngredients('beta'), position: 40 }, 1);
+  const resumed = hydrate(persisted);
+  assert.equal(resumed.screen, DONE);
+  assert.equal(resumed.position, BETA.steps.length + 1);
+});
+
+test('the screen always agrees with the position a session is resumed at', () => {
+  const persisted = saved({ ...onIngredients('alpha'), screen: DONE, position: 1 }, 1);
+  assert.equal(hydrate(persisted).screen, STEP);
+});
+
+test('a malformed persisted value opens the menu rather than failing', () => {
+  for (const persisted of ['', 7, [], { savedAt: NOW }, { ...initialState(), savedAt: 'soon' }]) {
+    assert.deepEqual(hydrate(persisted), initialState());
+  }
+});
+
+test('a timer missing the instant it ends is dropped rather than kept forever', () => {
+  const started = reduce(onTimerStep(), ACTIVATE, NOW);
+  const persisted = saved({ ...started, timers: [...started.timers, { id: 'junk', label: 'Junk' }] }, 1);
+  assert.deepEqual(
+    hydrate(persisted).timers.map((timer) => timer.id),
+    started.timers.map((timer) => timer.id),
+  );
+});
+
+test('hydration does not mutate the value it was handed', () => {
+  const persisted = deepFreeze(saved(onIngredients('alpha'), 1));
+  hydrate(persisted);
+  assert.equal(persisted.savedAt, NOW - HOUR);
+});
+
 
 test('the reducer does not mutate the state it is given', () => {
   const opened = deepFreeze(initialState());

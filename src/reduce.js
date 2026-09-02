@@ -239,6 +239,79 @@ function move(state, recipes, delta) {
   return at(state, recipe, position);
 }
 
+// --- Hydration ------------------------------------------------------------
+// A reload mid-cook is not an edge case here: the platform's suspension
+// behaviour is an open question, and the glasses may kill the page at any
+// moment. So a session is written to storage on every transition and picked up
+// again on load, with no resume prompt — making the cook perform a gesture to
+// get back to a place the application already knows is the friction this
+// product exists to remove.
+//
+// The persisted value is a state carrying one extra field: the instant it was
+// written. That is what lets the edge that reads storage stay a parser and
+// nothing more — it hands what it read straight to HYDRATE, and the decision
+// to resume or to discard is taken here with the rest of them. Hydration
+// consumes that field, so nothing downstream ever sees it.
+
+// Long enough to survive a slow braise, short enough that yesterday's dinner
+// never ambushes the cook at breakfast.
+const SESSION_MAX_AGE_MS = 6 * 60 * MINUTE_MS;
+
+// A session is worth resuming when it was written by this application, within
+// the window, and not at an instant the clock has yet to reach. A missing or
+// unparseable `savedAt` makes the age NaN, which is neither, so a value from
+// some other writer is discarded by the same arithmetic as a stale one.
+function resumable(persisted, now) {
+  if (persisted === null || typeof persisted !== 'object' || Array.isArray(persisted)) return false;
+  const age = now - persisted.savedAt;
+  return age >= 0 && age <= SESSION_MAX_AGE_MS;
+}
+
+// Timers are rebuilt rather than trusted: a timer without the instant it ends
+// cannot have its remaining time derived, and one kept anyway would read as
+// finished forever with no way to be cleared.
+function hydratedTimers(timers) {
+  if (!Array.isArray(timers)) return [];
+  return timers.filter(
+    (timer) => timer !== null && typeof timer === 'object' && Number.isFinite(timer.endsAt),
+  );
+}
+
+// An alert names the timer it is signalling for, so one whose timer did not
+// survive is not an alert.
+function hydratedAlert(alert, timers) {
+  if (alert === null || typeof alert !== 'object') return null;
+  return timers.some((timer) => timer.id === alert.timerId) ? alert : null;
+}
+
+const clamp = (value, max) => Math.min(Math.max(Number.isInteger(value) ? value : 0, 0), max);
+
+function hydrate(persisted, recipes, now) {
+  if (!resumable(persisted, now)) return initialState();
+
+  const timers = hydratedTimers(persisted.timers);
+  const resumed = { ...initialState(), timers, alert: hydratedAlert(persisted.alert, timers) };
+
+  // A session abandoned to the menu is still worth resuming: its timers are
+  // running, and the recipe last cooked stays focused.
+  const recipe = currentRecipe(persisted, recipes);
+  if (!recipe) {
+    // Either nothing was chosen, or the recipe has left the catalogue since.
+    // A position into a recipe that no longer exists means nothing, and the
+    // rest of the session is a fragment of it, so that one starts over.
+    if (persisted.recipeId != null) return initialState();
+    const focus = recipes.length === 0 ? 0 : clamp(persisted.focus, recipes.length - 1);
+    return { ...resumed, focus };
+  }
+
+  // Recipes are edited between sessions, so a persisted position can name a
+  // step that is no longer there. Landing on the completion screen is the
+  // truthful answer and needs no new affordance: left walks back into the
+  // recipe as it now stands.
+  const position = clamp(persisted.position, donePosition(recipe));
+  return at({ ...resumed, recipeId: recipe.id }, recipe, position);
+}
+
 /**
  * Binds a reducer to the recipes on offer. The catalogue is fetched at the
  * edge and never changes during a session, so it is closed over rather than
@@ -265,11 +338,13 @@ export function createReduce(recipes) {
         return move(state, recipes, -1);
       case SWIPE_RIGHT:
         return move(state, recipes, +1);
+      case HYDRATE:
+        return hydrate(state, recipes, now);
       default:
         // A tick moves nothing here. A running timer's remaining time is
         // derived from the clock rather than stored, so what a tick is for is
         // the redraw the edge performs around it. It gains work of its own
-        // with the alert ticket, and HYDRATE with resume.
+        // with the alert ticket.
         return state;
     }
   };
