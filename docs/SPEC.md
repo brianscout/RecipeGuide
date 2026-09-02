@@ -158,7 +158,7 @@ When a timer reaches zero it enters an alert sequence:
 
 The decay is what allows the alert to be both unmissable and non-blocking: it grabs attention from a cook who is not looking at the display, then gets out of the way of a cook who is mid-task and cannot respond immediately.
 
-Because audio and haptics are not known to be available, brightness and motion are the only alert channels currently assumed. See *Further Notes*.
+Audio is not pursued, and haptics is not known to be available, so brightness and motion are the only alert channels currently assumed. See *Further Notes*.
 
 ### Recipe data
 
@@ -232,7 +232,7 @@ There is no prior art — this is a greenfield repository with no existing tests
 
 There is exactly one: the pure reducer, together with recipe validation, forming the application's pure core. Everything else — keyboard listening, rendering, local storage, the tick interval — is I/O at the edges and is not unit tested.
 
-The capability probe is built to the same shape and for the same reason. `src/probe-capabilities.js` takes the browser APIs it exercises as an injected environment and returns a result record, so the part that decides a product question — what `accepted`, `blocked`, `absent`, and `rejected` each mean — is tested rather than observed once on a device and remembered. The page around it is an edge like any other.
+The capability probe is built to the same shape and for the same reason. `src/probe-capabilities.js` takes the browser API it exercises as an injected environment and returns a result record, so the part that decides a product question — what `accepted`, `blocked`, `rejected`, `absent`, and `error` each mean — is tested rather than observed once on a device and remembered. The page around it is an edge like any other.
 
 Supplying the current time as an argument is load-bearing for testability. A twenty-minute countdown, a ten-second alert decay, and a six-hour session expiry are all tested by calling the reducer with two different timestamps. No fake timers, no clock mocking, no waiting.
 
@@ -251,7 +251,7 @@ Node's built-in test runner. It executes ES modules directly with no dependencie
 - Concurrent expiry: two timers finishing close together.
 - Session expiry: hydration inside and outside the six-hour window.
 - Recipe validation: rejection of over-length step text, missing required fields, and malformed timer configuration, with the recipe and field named in the failure.
-- Capability probe classification: each channel present and working, missing entirely, refused by policy, and refused for capability, plus the generated tone's WAV header and envelope.
+- Capability probe classification: the haptics channel working, missing entirely, refused, and throwing — including a `vibrate()` that returns something other than `true`, which must never be read as acceptance, and a missing user activation, which must be reported as `blocked` without the call being made at all.
 
 ### What is verified by hand
 
@@ -286,13 +286,17 @@ Two platform behaviours could not be established from the documentation and are 
 
    The design is already hardened against the bad outcome: absolute-timestamp timers rehydrate correctly regardless of what happened while the app was not running. What cannot be mitigated in the current design is an alert that needs to fire while the app is suspended. If suspension proves aggressive, the alert behaviour needs rethinking and the native path's advantages become materially more attractive.
 
-2. **Audio and haptics.** The documentation lists supported capabilities (display, input, IMU, location, local storage, app icons) and unsupported ones (camera, microphone, text input, offline, notifications, back navigation). **Audio output and haptics appear on neither list.** The hardware has speakers and the Neural Band has haptics, but nothing confirms either is reachable from a Web App.
+2. **Haptics.** The documentation lists supported capabilities (display, input, IMU, location, local storage, app icons) and unsupported ones (camera, microphone, text input, offline, notifications, back navigation). **Haptics appears on neither list.** The Neural Band has haptics, but nothing confirms it is reachable from a Web App.
 
-   This is worth probing early during implementation, because a working beep upgrades the alert from "a bright pulse in your peripheral vision" to something genuinely reliable at a stove. The alert design should be structured so that adding an audio or vibration trigger is a single addition at the point of expiry, not a redesign.
+   This is worth probing early during implementation, because a working buzz upgrades the alert from "a bright pulse in your peripheral vision" to something genuinely reliable at a stove. The alert design should be structured so that adding a vibration trigger is a single addition at the point of expiry, not a redesign.
 
-   **The probe.** `scripts/probe-capabilities.html` attempts all three channels — an HTML audio element, a Web Audio oscillator, and `navigator.vibrate()` — and renders each outcome on the display, since there is no console to read on the glasses. It is registered as its own Web App tile and stepped through with pinches, one channel at a time, so a tone or a buzz can be attributed to a single cause. The classification lives in `src/probe-capabilities.js` and is unit tested. See README.md, *The capability probe*.
+   **Audio is not pursued.** It was originally paired with haptics in this question and has been dropped by decision rather than by finding. The alert needs one channel that reaches a cook who is not looking at the display, and a buzz on the wrist is the better one to have: silent in company, and it survives a noisy kitchen without being mistaken for something on the stove. If haptics turns out to be unreachable, audio is the first thing to reconsider before accepting a display-only alert.
 
-   A probe reporting `accepted` means the platform took the request, **not** that a sound left the speakers or the band buzzed. Only a person wearing the glasses can settle that, so the device pass records what was heard and felt alongside what the API returned.
+   **The probe.** `scripts/probe-capabilities.html` calls `navigator.vibrate()` and renders the outcome on the display, since there is no console to read on the glasses. It is registered as its own Web App tile and run with a pinch — `navigator.vibrate()` is gated on user activation, so probing on load would measure that gate and report a false negative. The classification lives in `src/probe-capabilities.js` and is unit tested. See README.md, *The capability probe*.
+
+   A probe reporting `accepted` means the platform took the request, **not** that the band moved. Only a person wearing it can settle that, so the device pass records what was felt alongside what the API returned.
+
+   The probe guards against its own worst failure mode. Chrome refuses `navigator.vibrate()` without user activation and returns `false` — the same `false` a platform with no haptics returns, which would retire a channel the product may actually have. So activation is checked first and the call is declined rather than made, reported as `blocked`. A `blocked` result on the glasses is not a haptics finding; it is the finding that a pinch does not grant user activation, which matters on its own.
 
    **Result: not yet established.** The probe runs correctly in a desktop browser, but a desktop pass proves nothing about the device, and the run on the glasses has not been done. Until it is, the alert continues to assume brightness and motion are the only channels available.
 

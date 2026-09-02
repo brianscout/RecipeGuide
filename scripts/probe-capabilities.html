@@ -48,30 +48,34 @@
 </head>
 <body>
   <main class="screen">
-    <h1 class="title">Audio &amp; haptics probe</h1>
+    <h1 class="title">Haptics probe</h1>
     <div class="probes" id="probes"></div>
     <p class="hint" id="hint">&mdash;</p>
     <p class="agent" id="agent"></p>
   </main>
 <script type="module">
-// Runs the capability probes on the device and renders the outcome, because
+// Runs the capability probe on the device and renders the outcome, because
 // there is no console to read on the glasses. The classification logic lives
 // in src/probe-capabilities.js and is unit tested; this file is the edge —
-// key handling, DOM, and the real browser APIs.
+// key handling, DOM, and the real browser API.
 //
-// Probes run one at a time on a pinch rather than all at once on load. Two
-// reasons: audio needs a user gesture, so a load-time attempt would report an
-// autoplay block rather than the platform's actual capability; and overlapping
-// tones cannot be attributed to a single source by ear.
+// The probe runs on a pinch rather than on load. navigator.vibrate() is gated
+// on user activation, so a load-time attempt would measure that gate rather
+// than the platform's actual capability and report a false negative. If the
+// pinch turns out not to grant activation on the glasses, the probe reports
+// `blocked` and says so, rather than passing off the gate as a finding.
 //
 // See docs/SPEC.md, "Open questions carried into implementation", item 2.
 
 import { PROBES, runProbe, summarize, describeResult } from '../src/probe-capabilities.js';
 
 const env = {
-  createAudio: typeof Audio === 'undefined' ? undefined : (src) => new Audio(src),
-  AudioContext: window.AudioContext ?? window.webkitAudioContext,
   vibrate: navigator.vibrate ? (pattern) => navigator.vibrate(pattern) : undefined,
+  // Left undefined where the engine cannot report activation, which the module
+  // reads as "cannot check" rather than "not activated".
+  hasUserActivation: navigator.userActivation
+    ? () => navigator.userActivation.isActive
+    : undefined,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
@@ -104,8 +108,8 @@ async function step() {
   if (busy) return;
 
   if (next >= PROBES.length) {
-    // Finished. Start over so the observer can hear or feel it a second time
-    // before deciding what to write down.
+    // Finished. Start over so the observer can feel it a second time before
+    // deciding what to write down.
     results.length = 0;
     next = 0;
     rows.forEach((row, index) => draw(index, {
@@ -118,7 +122,7 @@ async function step() {
   busy = true;
   const probe = PROBES[next];
   draw(next, { state: 'current', label: probe.label, detail: 'running…' });
-  hintEl.textContent = 'Watch, listen, feel';
+  hintEl.textContent = 'Watch and feel';
 
   const result = await runProbe(probe.id, env);
   results.push(result);
@@ -127,7 +131,7 @@ async function step() {
   next += 1;
   busy = false;
   hintEl.textContent = next >= PROBES.length
-    ? 'Done. Transcribe the three lines. Pinch to run again.'
+    ? 'Done. Write down the row and whether you felt it. Pinch to run again.'
     : `Pinch for ${PROBES[next].label}`;
 
   // Available for a desktop pass where a console does exist; on the glasses

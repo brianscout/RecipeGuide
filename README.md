@@ -97,11 +97,20 @@ It then appears as a tile at the bottom of the app grid on the glasses.
 
 ## The capability probe
 
-Whether a Web App on these glasses can make a sound or a vibration is not
-answered by the platform documentation — audio output and haptics appear on
-neither the supported nor the unsupported list. `scripts/probe-capabilities.html`
-settles it by attempting all three channels and rendering each outcome on the
-display, because there is no console to read on the glasses.
+Whether a Web App on these glasses can drive the Neural Band's haptics is not
+answered by the platform documentation — haptics appears on neither the
+supported nor the unsupported list. This decides the timer alert: a buzz on the
+wrist reaches a cook who is not looking at the display, and without it
+brightness and motion in peripheral vision are the only channels available.
+
+`scripts/probe-capabilities.html` settles it by calling `navigator.vibrate()`
+and rendering the outcome on the display, because there is no console to read
+on the glasses.
+
+Audio was considered and dropped. The alert needs one channel that reaches you
+when you are not looking, and a buzz is the better one to have: silent in
+company, and it survives a noisy kitchen without being mistaken for something
+on the stove.
 
 Desktop first, to confirm the page itself works:
 
@@ -114,23 +123,30 @@ pass proves nothing about the device, so register it as its own Web App tile —
 same steps as above, named `Probe`, with the URL
 <https://brianscout.github.io/RecipeGuide/scripts/probe-capabilities.html>.
 
-Pinch once per channel. Each probe runs alone so a tone or a buzz can be
-attributed to a single cause, and audio needs a user gesture, so running on a
-pinch is what makes the result about the platform rather than about the
-autoplay policy.
+Pinch to run it. `navigator.vibrate()` is gated on user activation, so running
+it on a pinch is what makes the result about the platform rather than about
+that gate — probing on load would report a false negative.
 
-Read each row as two separate facts:
+Read the row as two separate facts:
 
 | Status | What the platform did |
 | --- | --- |
-| `accepted` | Took the request. Whether anything was audible is a separate question. |
-| `blocked` | Refused for a policy reason. Likely reachable under other conditions. |
-| `rejected` | Refused for a capability reason. Treat as unavailable. |
+| `accepted` | Took the request. Whether the band moved is a separate question. |
+| `rejected` | Refused. Treat the channel as unavailable. |
 | `absent` | The API is not on the platform at all. |
+| `blocked` | Not asked, because the pinch did not register as a gesture. Says nothing about haptics — see below. |
 | `error` | Threw before the attempt could be made. |
 
-`accepted` is not the finding on its own. Write down what you actually heard
-and felt next to it, then fold both into
+`blocked` is the one status that is not a finding. Chrome refuses
+`navigator.vibrate()` without user activation and returns `false` — the same
+`false` a platform with no haptics returns. Rather than report that as
+`rejected` and quietly retire a channel the product may actually have, the
+probe checks for activation first and declines to ask. If you see `blocked` on
+the glasses, the finding is that a pinch does not grant user activation, which
+is worth knowing on its own.
+
+`accepted` is not the finding on its own. Write down whether you actually felt
+it next to the status, then fold both into
 [issue #3](https://github.com/brianscout/RecipeGuide/issues/3) and into
 `docs/SPEC.md`, *Further Notes — Open questions carried into implementation*,
 item 2.
