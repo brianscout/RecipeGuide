@@ -1,0 +1,49 @@
+{
+  "id": "miso-salmon",
+  "title": "Miso-Glazed Salmon",
+  "servings": 4,
+  "totalMinutes": 60,
+  "ingredients": [
+    { "quantity": "4 x 150 g", "item": "salmon fillets, skin on" },
+    { "quantity": "3 tbsp", "item": "white miso" },
+    { "quantity": "2 tbsp", "item": "mirin" },
+    { "quantity": "1 tbsp", "item": "sake or dry sherry" },
+    { "quantity": "1 tbsp", "item": "caster sugar" },
+    { "quantity": "2 tsp", "item": "toasted sesame oil" },
+    { "quantity": "300 g", "item": "short-grain rice" },
+    { "quantity": "360 ml", "item": "cold water, for the rice" },
+    { "quantity": "1 tsp", "item": "rice vinegar" },
+    { "quantity": "4", "item": "spring onions, sliced on the diagonal" },
+    { "quantity": "1 tsp", "item": "toasted sesame seeds" },
+    { "quantity": "to serve", "item": "steamed greens" }
+  ],
+  "steps": [
+    { "text": "Whisk the miso, mirin, sake, sugar, and sesame oil to a smooth, glossy glaze." },
+    {
+      "text": "Turn the salmon in half the glaze and leave it skin side down. Keep the rest of the glaze back.",
+      "minutes": 30,
+      "timerLabel": "Marinate"
+    },
+    { "text": "Rinse the rice in cold water until the water runs almost clear, then drain it well." },
+    { "text": "Bring the rice and the measured water to a boil in a lidded pan, then drop the heat to its lowest." },
+    {
+      "text": "Cook it covered, without once lifting the lid, until the water has all been taken up.",
+      "minutes": 12,
+      "timerLabel": "Rice"
+    },
+    {
+      "text": "Slide the pan off the heat and leave the lid on. The rice finishes in its own steam.",
+      "minutes": 10,
+      "timerLabel": "Steam"
+    },
+    { "text": "Heat the grill to high and line a tray with foil. Lift the salmon out and let the excess drip off." },
+    {
+      "text": "Grill the salmon skin side down until the top is lacquered and blistered in places.",
+      "minutes": 8,
+      "timerLabel": "Grill"
+    },
+    { "text": "Warm the held-back glaze with the rice vinegar and a splash of water until it just loosens." },
+    { "text": "Fork the rice through to separate the grains and spoon it into four bowls." },
+    { "text": "Sit the salmon on the rice, spoon over the warm glaze, and finish with the spring onions and sesame." }
+  ]
+}
