@@ -108,7 +108,14 @@ node scripts/serve.mjs
 then open `http://localhost:8000/scripts/measure-ingredients-ceiling.html`.
 
 At the device viewport the list gets a **520 x 468** pane below a single-row
-header, and each row is 26px:
+header, and each row is 26px. The header's height is pinned in `styles.css`
+rather than set by what is in it, so the pane is 468 whether the header is
+showing the eyebrow or the timer indicator — which is what lets one
+measurement stand for both. It did not always: the timer indicator is 8px
+taller than the eyebrow it replaces, and before the header was pinned a
+running timer took those 8px out of the list and with them the row of margin
+behind `MAX_INGREDIENTS`. A change to the header row is a change to this
+number, so re-run the harness after one.
 
 | Measured | Pinned | Constant |
 | --- | --- | --- |

@@ -6,7 +6,13 @@
 <title>Ingredient list measurement</title>
 <!-- The real stylesheet, not a copy of it: this harness is only honest about
      the ingredients screen if it is measuring the same geometry the screen is
-     drawn with. -->
+     drawn with.
+
+     The header below carries the eyebrow, where the real screen carries the
+     timer indicator instead whenever anything is running. That substitution is
+     safe to ignore only because .header pins its own height: the pane below is
+     468 either way. If that pin goes, this harness measures a screen the cook
+     never sees with a timer on it. -->
 <link rel="stylesheet" href="../styles.css">
 <style>
   #report { position: fixed; left: 0; top: 0; visibility: hidden; white-space: pre; }

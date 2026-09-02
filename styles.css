@@ -61,20 +61,36 @@ body {
 
 /* Label on the left, what is being cooked on the right, on one row. A second
    row of header would come out of the ingredient list, which has none to give
-   on the longest recipe. */
+   on the longest recipe.
+
+   The height is pinned to the taller of the two things that sit in the label
+   slot — the timer indicator, not the eyebrow — so that starting a timer does
+   not reflow the list underneath it. That is the same reason the cook screen
+   reserves its timer row whether or not anything is in it. Pinning it costs
+   the list the eight pixels the eyebrow was not using, and the negative margin
+   gives them back: the pane has to hold all eighteen rows MAX_INGREDIENTS was
+   measured against, with a timer running or without one. */
 .header {
   display: flex;
   flex: none;
+  height: 36px;
+  margin-bottom: -8px;
   align-items: baseline;
   justify-content: space-between;
   gap: 20px;
 }
 
-/* Never shrinks and never wraps: a second row of header would come out of the
-   list below it, and the timer indicator beside it gives way instead. */
+/* Truncated rather than wrapped, and it is this half of the row that gives way
+   when the two do not both fit. The timer indicator beside it is time-critical
+   and this is not: a cook chose this recipe two gestures ago, and its full
+   title is still on the menu one swipe to the left. An ellipsis also says what
+   it did, where a dropped timer says nothing. */
 .header__title {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 20px;
   font-weight: 600;
   color: var(--content);
@@ -202,10 +218,13 @@ body {
    dropped. */
 .timers {
   display: flex;
-  /* Sized by what is in it and no more. On three of the four screens it is a
-     row inside a column, where growing would take the pane below it; on the
-     fourth it gives way before the header title beside it. */
-  min-width: 0;
+  /* Sized by what is in it, and never squashed below that. How many chips the
+     520px line holds is settled by MAX_TIMERS_SHOWN in src/render.js, so a row
+     narrowed by something beside it would clip a timer that MAX_TIMERS_SHOWN
+     had already decided there was room for — and clip .timers__more with it,
+     leaving nothing on screen to say a timer was missing. On the ingredients
+     screen, the header title truncates instead. */
+  flex: none;
   align-items: baseline;
   gap: 24px;
   overflow: hidden;
