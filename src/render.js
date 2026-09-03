@@ -70,15 +70,33 @@ function unknown(what) {
 // instruction its last line. See MAX_INGREDIENTS and MAX_STEP_CHARS in
 // src/validate-recipe.js.
 
-// How many timers the row holds at once, and what the offer costs in chips.
-// Both are the 520px line these screens are drawn on, measured rather than
-// guessed: at this type size the widest timer the corpus can produce —
-// "MARINATE 30:00" — is 171px, the offer that starts it is 268px, and the gap
-// between two of them is 24px. Two timers and the overflow count come to
-// 410px; the offer, one timer, and the count come to 510px. A third of either
-// does not fit.
-const MAX_TIMERS_SHOWN = 2;
-const OFFER_COST = 1;
+// Every running timer is on screen, because a timer a cook cannot see is a
+// timer they are keeping in their head, which is the thing this application
+// exists to stop.
+//
+// What makes that fit on a 520px line is two decisions, both measured against
+// the widest the row can ever be: every label the corpus can produce at its
+// longest, every countdown reading ten minutes or more, where the digits are
+// widest.
+//
+// The offer that starts a timer is not in this row at all. It costs 268px —
+// three running timers' worth of room, given to something that is not yet a
+// timer — so it sits in the footer instead.
+//
+// And the labels shorten when the row gets crowded. Three full-label timers
+// come to 501px; a fourth takes them to 678px, and cut to three characters the
+// four come to 498px. Five never fits, at any gap or label length: 622px, over
+// by a hundred rather than by a font metric. That is the cliff
+// MAX_CONCURRENT_TIMERS in src/validate-recipe.js enforces at the desk, and
+// what is below is the failsafe for a session written before it existed — the
+// row counts what it cannot draw rather than dropping it silently.
+const MAX_TIMERS_SHOWN = 4;
+
+// Where full labels stop fitting. Below this the row says "MARINATE"; at it
+// and above, "MAR" — a name a cook can still tell from the other three, which
+// is all the row has to do while nothing has finished.
+const SHORT_LABEL_FROM = 4;
+const SHORT_LABEL_CHARS = 3;
 
 const pad = (value) => String(value).padStart(2, '0');
 
@@ -99,44 +117,49 @@ function chip(className, label, value) {
 }
 
 // What a step offers before it is started: its length, and the one gesture
-// that starts it. Drawn with the focus bar of a focused menu row, because the
-// gesture that operates it is the same gesture.
+// that starts it. Drawn in the footer at the footer's scale, wearing the bar of
+// a focused menu row because the gesture that operates it is the same gesture.
 //
-// It carries focus only while focus is on it. A step also offers stopping, one
-// swipe below, and two things wearing the focus bar at once would leave a cook
-// guessing what their pinch is about to do.
-const offerChip = (offer, focused) =>
-  chip(
-    focused
-      ? 'timers__timer timers__timer--offer timers__timer--offer-focused'
-      : 'timers__timer timers__timer--offer',
-    `Start ${offer.label}`,
-    `${offer.minutes} min`,
-  );
+// It is only ever drawn focused. A step's focus starts here, and the one place
+// focus can move to — stopping — takes the whole footer when it gets there, so
+// there is never a moment where this is on screen without the pinch belonging
+// to it.
+const offerChip = (offer) =>
+  chip('offer', `Start ${offer.label}`, `${offer.minutes} min`);
 
 // A finished timer reads as finished, and keeps reading that way until a pinch
 // clears it: the brightest thing in the row, and the only moving thing on the
 // screen. This is what the takeover decays into, and it does not time out.
-const timerChip = (timer) =>
+//
+// It also keeps its full name however crowded the row is. It is the one a cook
+// has to act on, and "MAS" is a poor thing to read when something is burning.
+const timerChip = (timer, short) =>
   chip(
     timer.finished ? 'timers__timer timers__timer--finished' : 'timers__timer',
-    timer.label,
+    short && !timer.finished ? timer.label.slice(0, SHORT_LABEL_CHARS) : timer.label,
     timer.finished ? 'done' : countdown(timer.remainingMs),
   );
 
-function timers(state, recipes, now) {
+function timers(state, now) {
   const running = timersAt(state, now);
-  const offer = timerOffer(state, recipes, now);
-  if (running.length === 0 && !offer) return null;
+  if (running.length === 0) return null;
 
-  // Soonest first, so what the row drops is the timer furthest from needing
-  // attention. What does not fit is counted rather than left out: content
-  // hidden with no sign of it is the one failure this display cannot afford.
-  const shown = running.slice(0, MAX_TIMERS_SHOWN - (offer ? OFFER_COST : 0));
+  // Soonest first, so what a row past the ceiling drops is the timer furthest
+  // from needing attention. What does not fit is counted rather than left out:
+  // content hidden with no sign of it is the one failure this display cannot
+  // afford.
+  //
+  // The count costs a timer's place rather than being squeezed in beside four
+  // of them. Four and a count come to 542px of the 520px line, which clips the
+  // count itself — the one thing in the row that must never be clipped, since
+  // it is what says the row is incomplete. Three and a count come to 411px.
+  const overflowing = running.length > MAX_TIMERS_SHOWN;
+  const shown = running.slice(0, overflowing ? MAX_TIMERS_SHOWN - 1 : MAX_TIMERS_SHOWN);
+
   const node = element('div', 'timers');
-  if (offer) node.append(offerChip(offer, state.focus !== STEP_STOP));
-  node.append(...shown.map(timerChip));
-  if (running.length > shown.length) {
+  const short = overflowing || shown.length >= SHORT_LABEL_FROM;
+  node.append(...shown.map((timer) => timerChip(timer, short)));
+  if (overflowing) {
     node.append(element('span', 'timers__more', `+${running.length - shown.length}`));
   }
   return node;
@@ -157,7 +180,7 @@ function menu(state, recipes, now) {
   }
   const list = element('div', 'menu');
   list.append(...recipes.map((recipe, index) => menuRow(recipe, index === state.focus)));
-  return screen(timers(state, recipes, now) ?? element('p', 'eyebrow', 'Recipes'), list);
+  return screen(timers(state, now) ?? element('p', 'eyebrow', 'Recipes'), list);
 }
 
 function ingredientRow({ quantity, item }) {
@@ -178,15 +201,25 @@ function ingredients(state, recipes, now) {
 
   const list = element('ul', 'ingredients');
   list.append(...recipe.ingredients.map(ingredientRow));
-  const label = timers(state, recipes, now) ?? element('p', 'eyebrow', 'Ingredients');
+  const label = timers(state, now) ?? element('p', 'eyebrow', 'Ingredients');
   return screen(header(label, recipe.title), list);
+}
+
+// Progress, and the timer the step offers where it has one. Both are dim and
+// subordinate to the instruction above them, and both share one row: a second
+// row would come out of the instruction's pane, which is a measured ceiling.
+function footer(state, recipes, now, index, recipe) {
+  const node = element('p', 'progress');
+  node.append(element('span', 'progress__step', `Step ${index + 1} of ${recipe.steps.length}`));
+  const offer = timerOffer(state, recipes, now);
+  if (offer) node.append(offerChip(offer));
+  return node;
 }
 
 // The cook screen: one instruction, owning the pane. The timer row is reserved
 // whether or not anything is in it, because its height is part of what the
 // step ceiling was measured against and because starting a timer must never
-// reflow the text under a cook's eyes. Progress is present but dim, and
-// subordinate.
+// reflow the text under a cook's eyes.
 function step(state, recipes, now) {
   const recipe = currentRecipe(state, recipes);
   const index = stepIndex(state);
@@ -194,20 +227,25 @@ function step(state, recipes, now) {
   if (!instruction) return unknown('Unknown step.');
 
   const row = element('div', 'timer');
-  const live = timers(state, recipes, now);
+  const live = timers(state, now);
   if (live) row.append(live);
 
-  // Stopping takes the progress row rather than adding one. The instruction
-  // pane's height is what MAX_STEP_CHARS was measured against, so a secondary
-  // action that grew the screen would quietly cost the longest instruction its
-  // last line. It is drawn only while focused, which is what docs/SPEC.md asks
-  // of a secondary action: reached by vertical focus rather than always there.
-  const footer =
+  // Everything other than the instruction and the running timers lives in one
+  // 28px footer, and nothing here ever adds a second row. The instruction pane
+  // is what MAX_STEP_CHARS was measured against, so a row that grew the screen
+  // would quietly cost the longest instruction its last line.
+  //
+  // Focused on stopping, the footer is that and nothing else. Otherwise it is
+  // how far through the recipe the cook is, plus the timer this step offers if
+  // it carries one — which is why the indicator above can be given over
+  // entirely to timers that are actually running.
+  return screen(
+    row,
+    element('p', 'instruction', instruction.text),
     state.focus === STEP_STOP
       ? element('p', 'progress progress--stop', 'Stop cooking')
-      : element('p', 'progress', `Step ${index + 1} of ${recipe.steps.length}`);
-
-  return screen(row, element('p', 'instruction', instruction.text), footer);
+      : footer(state, recipes, now, index, recipe),
+  );
 }
 
 // The end of the flow. Right stops here; left is still the way back into the
@@ -217,7 +255,7 @@ function done(state, recipes, now) {
   if (!recipe) return unknown('Unknown recipe.');
 
   return screen(
-    timers(state, recipes, now) ?? element('p', 'eyebrow', 'Finished'),
+    timers(state, now) ?? element('p', 'eyebrow', 'Finished'),
     element('h1', 'title', recipe.title),
     element('p', 'hint', `${plural(recipe.steps.length, 'step')}, done.`),
     action('Back to the recipes'),

@@ -7,6 +7,7 @@ import {
   MAX_STEP_CHARS,
   MAX_INGREDIENTS,
   MAX_INGREDIENT_CHARS,
+  MAX_CONCURRENT_TIMERS,
   validateRecipe,
   assertValidRecipe,
 } from '../src/validate-recipe.js';
@@ -120,6 +121,33 @@ test('too many ingredients are rejected, naming the recipe and the count', () =>
   assert.match(message, /ingredients/);
   assert.match(message, new RegExp(String(MAX_INGREDIENTS + 1)));
   assert.match(message, new RegExp(String(MAX_INGREDIENTS)));
+});
+
+test('a recipe carrying more timers than the indicator shows is rejected', () => {
+  const steps = Array.from({ length: MAX_CONCURRENT_TIMERS + 1 }, (_, index) => ({
+    text: `Step ${index + 1}`,
+    minutes: 5,
+    timerLabel: `Timer ${index + 1}`,
+  }));
+  const message = onlyError(recipe({ steps }));
+  assert.match(message, /test-recipe/);
+  assert.match(message, new RegExp(String(MAX_CONCURRENT_TIMERS + 1)));
+  assert.match(message, new RegExp(String(MAX_CONCURRENT_TIMERS)));
+});
+
+test('a recipe exactly at the timer ceiling is accepted', () => {
+  const steps = Array.from({ length: MAX_CONCURRENT_TIMERS }, (_, index) => ({
+    text: `Step ${index + 1}`,
+    minutes: 5,
+    timerLabel: `Timer ${index + 1}`,
+  }));
+  assert.deepEqual(validateRecipe(recipe({ steps })), []);
+});
+
+test('untimed steps do not count against the timer ceiling', () => {
+  const steps = Array.from({ length: 12 }, (_, index) => ({ text: `Step ${index + 1}` }));
+  steps[0] = { text: 'Step 1', minutes: 5, timerLabel: 'Rest' };
+  assert.deepEqual(validateRecipe(recipe({ steps })), []);
 });
 
 test('a missing required field is rejected, naming the recipe and the field', () => {

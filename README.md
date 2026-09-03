@@ -48,10 +48,10 @@ it shows what pure black actually looks like on the waveguide.
 ## Recipes
 
 One JSON file per recipe in `recipes/`, deployed as authored. The schema, the
-150 character ceiling on step text, the two ceilings on the ingredient list, and
-how each of those numbers was measured are in
-[docs/RECIPE-SCHEMA.md](docs/RECIPE-SCHEMA.md). Every recipe in the folder is
-validated by the test run, so a malformed one cannot reach a deploy.
+150 character ceiling on step text, the two ceilings on the ingredient list, the
+four timed steps a recipe may carry, and how each of those numbers was measured
+are in [docs/RECIPE-SCHEMA.md](docs/RECIPE-SCHEMA.md). Every recipe in the
+folder is validated by the test run, so a malformed one cannot reach a deploy.
 
 `recipes/index.json` is the menu's running order: an array of recipe ids, each
 naming a sibling file, ordered by total time so the menu opens on the
@@ -124,6 +124,27 @@ localStorage.setItem('recipeguide:session', JSON.stringify({
 }));
 location.reload();
 ```
+
+## The timer indicator
+
+Every running timer is on screen. A timer a cook cannot see is a timer they are
+keeping in their head, which is the thing this exists to stop, so the row does
+not summarise.
+
+Two things buy the room for that on one 520px line. The offer that starts a
+timer is not in that row — it costs 268px, three running timers' worth of space
+for something that is not yet a timer, so it sits in the step's footer beside
+the progress line. And labels shorten when the row is crowded: up to three
+timers keep their full names, at four they are cut to three characters. A
+finished timer keeps its full name whatever else is running, because it is the
+one that has to be acted on.
+
+Four is the ceiling and it is enforced when a recipe is authored rather than
+when the row is drawn — see the concurrent timer ceiling in
+[docs/RECIPE-SCHEMA.md](docs/RECIPE-SCHEMA.md). Where more than four are
+somehow running, the row shows three and counts the rest; the count takes a
+timer's place rather than squeezing in beside four, because it is the one thing
+in the row that must never be clipped.
 
 ## Leaving a cook, and stopping one
 

@@ -157,6 +157,15 @@ Each timer stores an **absolute epoch timestamp** for when it ends, never a decr
 
 A timer indicator is rendered on every screen while any timer is running, and is omitted entirely when none are. The common case — a step with no active timer — gives the full display to the instruction.
 
+**Every running timer is shown, not a subset of them.** A timer a cook cannot see is a timer they are keeping in their head, which is the thing this application exists to stop, so the indicator does not summarise. Two things make that fit on one 520px row:
+
+- **The offer that starts a timer is not in that row.** It costs 268px — three running timers' worth of space, spent on something that is not yet a timer — so it sits in the step's footer beside the progress line instead.
+- **Labels shorten when the row is crowded.** Up to three timers carry their full names; at four they are cut to three characters, which still tells one from another. A finished timer keeps its full name whatever else is running, because it is the one that has to be acted on.
+
+The ceiling is four, and it is enforced at authoring time rather than at render time: `MAX_CONCURRENT_TIMERS` rejects a recipe with more timed steps than the indicator can hold, since a step whose timer is running offers no second one and so the count of timed steps is the most that can ever run at once. Five never fits at any gap or label length.
+
+Where more than four are somehow running — a session written before that ceiling existed, or timers surviving from a cook that was left rather than stopped — the row shows three and counts the rest. The count takes a timer's place rather than being squeezed in beside four, because the count is the one thing in the row that must never be clipped: it is what says the row is incomplete.
+
 ### Alert behaviour
 
 When a timer reaches zero it enters an alert sequence:

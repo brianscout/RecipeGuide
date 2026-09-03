@@ -89,6 +89,34 @@ with the device type sizes, not on the glasses themselves. Confirm it there
 when hardware is to hand — if the waveguide's rendering is wider, the pinned
 150 drops rather than the design changing.
 
+## The concurrent timer ceiling
+
+A recipe may carry at most **four timed steps**, which is the same as saying at
+most four timers can ever run at once: a step whose timer is running does not
+offer a second one, so the count of timed steps is the ceiling on concurrency.
+
+That number exists because every running timer is drawn — the indicator does
+not summarise, since a timer a cook cannot see is a timer they are keeping in
+their head. Measured against the widest the row can ever be, which is every
+label at its longest with every countdown reading ten minutes or more, where
+the digits are widest:
+
+| Row | Needs | Of 520px |
+| --- | --- | --- |
+| 3 timers, full labels | 501px | fits |
+| 4 timers, labels cut to three characters | 498px | fits |
+| 5 timers, any label length | 622px | does not |
+
+Unlike the two ceilings below, this one is **not** pinned one below what was
+measured. The unit here is a whole timer rather than a character or a row, and
+the gap between four and five is a hundred pixels — no difference in font
+metrics between the desktop browser and the glasses crosses that.
+
+`MAX_CONCURRENT_TIMERS` in `src/validate-recipe.js` rejects a fifth timed step,
+so a recipe that would overflow the row fails at the desk. The renderer still
+counts what it cannot draw, which covers a session written before this ceiling
+existed and timers carried over from a cook that was left rather than stopped.
+
 ## The ingredient list ceilings
 
 The ingredients screen shows the whole list at once and does not scroll either,

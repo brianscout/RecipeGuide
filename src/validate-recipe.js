@@ -27,6 +27,20 @@ export const MAX_INGREDIENTS = 17;
  */
 export const MAX_INGREDIENT_CHARS = 44;
 
+/**
+ * The most timed steps a recipe can carry, which is the most timers that can
+ * ever run at once: a step whose timer is running does not offer another, so
+ * the two numbers are the same number. Every running timer is drawn, so this
+ * is what keeps that promise keepable.
+ *
+ * Not pinned one below the measured fit, unlike the ceilings above. The unit
+ * here is a whole timer rather than a character or a row: four fit in 495px of
+ * the 520px line and five need 622px, so the cliff is a hundred pixels wide
+ * and no font metric crosses it. See MAX_TIMERS_SHOWN in src/render.js, which
+ * still counts what it cannot draw in case a session predates this.
+ */
+export const MAX_CONCURRENT_TIMERS = 4;
+
 const RECIPE_FIELDS = ['id', 'title', 'servings', 'totalMinutes', 'ingredients', 'steps'];
 const INGREDIENT_FIELDS = ['quantity', 'item'];
 const STEP_FIELDS = ['text', 'minutes', 'timerLabel'];
@@ -160,6 +174,17 @@ export function validateRecipe(recipe) {
     );
   }
   checkList(errors, name, 'steps', recipe.steps, checkStep);
+  if (Array.isArray(recipe.steps)) {
+    const timed = recipe.steps.filter(
+      (step) => step !== null && typeof step === 'object' && step.minutes !== undefined,
+    ).length;
+    if (timed > MAX_CONCURRENT_TIMERS) {
+      errors.push(
+        `${name}: steps carry ${timed} timers, over the ${MAX_CONCURRENT_TIMERS} the ` +
+          `indicator can show at once — a cook running them all would lose sight of one`,
+      );
+    }
+  }
   checkUnknown(errors, name, '', recipe, RECIPE_FIELDS);
   return errors;
 }

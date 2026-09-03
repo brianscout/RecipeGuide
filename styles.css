@@ -226,7 +226,14 @@ body {
      screen, the header title truncates instead. */
   flex: none;
   align-items: baseline;
-  gap: 24px;
+  /* 16px rather than 24px, which is what buys both crowded rows a margin.
+     Measured against the widest the row can ever be — every label the corpus
+     can produce at its longest, every countdown reading ten minutes or more,
+     which is where the digits are widest. Four short-label timers come to
+     498px of the 520px line and three full-label ones to 501px; at 24px they
+     were 522 and 517, so one of them did not fit at all. A change here is a
+     change to MAX_TIMERS_SHOWN and MAX_CONCURRENT_TIMERS. */
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -251,24 +258,27 @@ body {
 }
 
 /* The offer wears the bar of a focused menu row, because a pinch operates it
-   and a pinch operates those. The bar is always there and only its light
-   changes, so moving focus down to Stop cooking moves the eye rather than the
-   row — the same trick .action uses, for the same reason. */
-.timers__timer--offer {
-  padding-left: 14px;
-  border-left: 6px solid var(--ground);
+   and a pinch operates those. It sits in the footer rather than in the
+   indicator above, at the footer's scale: in the indicator it cost 268px of a
+   520px line, which is three running timers' worth of room given to something
+   that is not yet a timer. See MAX_TIMERS_SHOWN in src/render.js. */
+.offer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 6px solid var(--accent);
+  white-space: nowrap;
 }
 
-.timers__timer--offer-focused {
-  border-left-color: var(--accent);
-}
-
-.timers__timer--offer .timers__label {
-  color: var(--dim);
-}
-
-.timers__timer--offer-focused .timers__label {
+.offer .timers__label {
+  font-size: 14px;
   color: var(--content);
+}
+
+.offer .timers__value {
+  font-size: 18px;
+  color: var(--accent);
 }
 
 /* Finished is the brightest thing in the row and the only moving thing on the
@@ -343,9 +353,16 @@ body {
   overflow: hidden;
 }
 
+/* One row holding progress and, where the step has one, the timer it offers.
+   Progress keeps the left edge whether or not the offer is beside it, so the
+   thing a cook reads to know where they are does not move from step to step. */
 .progress {
   height: 28px;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
   font-size: 18px;
   color: var(--dim);
 }
