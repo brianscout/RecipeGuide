@@ -8,7 +8,15 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { MAX_INGREDIENTS } from '../src/validate-recipe.js';
+import { MAX_INGREDIENTS, MAX_CONCURRENT_TIMERS } from '../src/validate-recipe.js';
+
+// An editorial cap, not a display one. The screen holds seventeen ingredients
+// and four timers; these recipes are deliberately far inside both, because the
+// backlog is meant to be things you can cook on a weeknight without reading
+// ahead. Held here rather than in the validator, which states what the display
+// can draw and should not be made to state what the kitchen should ask for.
+const CORPUS_MAX_INGREDIENTS = 8;
+const CORPUS_MAX_TIMERS = 2;
 
 const RECIPES_DIR = fileURLToPath(new URL('../recipes/', import.meta.url));
 
@@ -35,10 +43,35 @@ test('five recipes ship', () => {
 // The walkthrough is the whole product, so the corpus has to cover a cook
 // that is over in a handful of beats and one that runs long enough for the
 // progress indicator to be doing real work.
-test('recipes vary in length, from a short cook to a long one', () => {
+test('recipes vary in length, from a short cook to a longer one', () => {
   const lengths = recipes.map((r) => r.steps.length);
-  assert.ok(Math.min(...lengths) <= 8, `shortest recipe has ${Math.min(...lengths)} steps`);
-  assert.ok(Math.max(...lengths) >= 12, `longest recipe has ${Math.max(...lengths)} steps`);
+  assert.ok(Math.min(...lengths) <= 5, `shortest recipe has ${Math.min(...lengths)} steps`);
+  assert.ok(Math.max(...lengths) >= 7, `longest recipe has ${Math.max(...lengths)} steps`);
+});
+
+// The whole point of this backlog is that it is easy. A recipe that grew past
+// these is not wrong, but it is not what this set is for, and it would want a
+// deliberate decision rather than an accident of authoring.
+test('every recipe stays inside the editorial caps', () => {
+  for (const r of recipes) {
+    assert.ok(
+      r.ingredients.length <= CORPUS_MAX_INGREDIENTS,
+      `${r.id} lists ${r.ingredients.length} ingredients, over the ${CORPUS_MAX_INGREDIENTS} this backlog allows`,
+    );
+    assert.ok(
+      timedSteps(r).length <= CORPUS_MAX_TIMERS,
+      `${r.id} carries ${timedSteps(r).length} timers, over the ${CORPUS_MAX_TIMERS} this backlog allows`,
+    );
+  }
+});
+
+// Eggs, chicken, steak. Named so that replacing the backlog with something
+// else is a decision someone takes rather than a test quietly going green.
+test('the backlog covers eggs, chicken, and steak', () => {
+  const ids = recipes.map((r) => r.id).join(' ');
+  for (const protein of ['egg', 'chicken', 'steak']) {
+    assert.match(ids, new RegExp(protein), `nothing in the backlog is ${protein}`);
+  }
 });
 
 // Concurrent timers are the hardest thing the reducer does. A recipe with one
@@ -48,13 +81,18 @@ test('at least two recipes carry multiple timed steps', () => {
   assert.ok(multiple.length >= 2, `only ${multiple.length} recipe(s) have two or more timers`);
 });
 
-// The ingredients screen does not scroll either, and that it fits is a claim
-// about the longest list that can exist, not the longest that happens to be in
-// the corpus. The validator holds the ceiling; this holds a fixture at it, so
-// the screen is always drawn against its own worst case.
-test('a recipe sits at the ingredient ceiling', () => {
-  const longest = Math.max(...recipes.map((r) => r.ingredients.length));
-  assert.equal(longest, MAX_INGREDIENTS, `longest ingredient list is ${longest}`);
+// This corpus deliberately does not reach the display's ceilings, so it is no
+// longer the fixture that proves the ingredients screen fits its worst case.
+// That job belongs to scripts/measure-ingredients-ceiling.html, which draws the
+// widest legal row eighteen times against the real stylesheet — a stricter test
+// than any recipe, since it uses the worst list that could exist rather than
+// the worst one that happens to be shipped. What is asserted here is only that
+// the corpus stays inside what the screen can draw.
+test('the corpus stays inside what the display can hold', () => {
+  for (const r of recipes) {
+    assert.ok(r.ingredients.length <= MAX_INGREDIENTS, `${r.id} has ${r.ingredients.length} ingredients`);
+    assert.ok(timedSteps(r).length <= MAX_CONCURRENT_TIMERS, `${r.id} has ${timedSteps(r).length} timers`);
+  }
 });
 
 // The ceiling forces short text; it does not force short *beats*. A step can

@@ -1,0 +1,24 @@
+{
+  "id": "poached-eggs-on-toast",
+  "title": "Poached Eggs on Toast",
+  "servings": 2,
+  "totalMinutes": 15,
+  "ingredients": [
+    { "quantity": "4", "item": "eggs, as fresh as you have" },
+    { "quantity": "1 tbsp", "item": "white wine vinegar" },
+    { "quantity": "2 slices", "item": "sourdough" },
+    { "quantity": "to serve", "item": "butter" },
+    { "quantity": "to taste", "item": "salt and black pepper" }
+  ],
+  "steps": [
+    { "text": "Fill a deep pan with water, bring it to a bare simmer, and add the vinegar." },
+    {
+      "text": "Crack each egg into a cup, then slide it into the water where it is moving.",
+      "minutes": 3,
+      "timerLabel": "Poach"
+    },
+    { "text": "Toast the sourdough and butter it right to the edges." },
+    { "text": "Lift the eggs out with a slotted spoon and rest them on a cloth to drain." },
+    { "text": "Sit them on the toast, season well, and eat them straight away." }
+  ]
+}

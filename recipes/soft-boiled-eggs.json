@@ -1,0 +1,23 @@
+{
+  "id": "soft-boiled-eggs",
+  "title": "Soft-Boiled Eggs",
+  "servings": 2,
+  "totalMinutes": 10,
+  "ingredients": [
+    { "quantity": "4", "item": "eggs, fridge-cold" },
+    { "quantity": "1 tsp", "item": "salt" },
+    { "quantity": "2 slices", "item": "bread, for toast" },
+    { "quantity": "to serve", "item": "butter" }
+  ],
+  "steps": [
+    { "text": "Bring a small pan of water to a rolling boil and salt it." },
+    {
+      "text": "Lower the eggs in on a spoon, one at a time, so the shells do not crack.",
+      "minutes": 6,
+      "timerLabel": "Boil"
+    },
+    { "text": "Toast the bread and butter it while the eggs cook." },
+    { "text": "Lift the eggs into cold water for half a minute, until you can hold them." },
+    { "text": "Crack the tops off, season, and serve with the toast cut into fingers." }
+  ]
+}

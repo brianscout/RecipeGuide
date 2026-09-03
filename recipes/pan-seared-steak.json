@@ -1,0 +1,33 @@
+{
+  "id": "pan-seared-steak",
+  "title": "Pan-Seared Steak",
+  "servings": 2,
+  "totalMinutes": 25,
+  "ingredients": [
+    { "quantity": "2", "item": "sirloin steaks, 3 cm thick" },
+    { "quantity": "1 tbsp", "item": "neutral oil" },
+    { "quantity": "1 tsp", "item": "salt" },
+    { "quantity": "1/2 tsp", "item": "black pepper, cracked" },
+    { "quantity": "30 g", "item": "butter" },
+    { "quantity": "2 cloves", "item": "garlic, bashed but whole" },
+    { "quantity": "2 sprigs", "item": "thyme" }
+  ],
+  "steps": [
+    { "text": "Salt the steaks on both sides and leave them out of the fridge to lose their chill." },
+    { "text": "Get a heavy pan very hot with the oil, until it is just short of smoking." },
+    {
+      "text": "Lay the steaks in and leave them alone so a crust has time to form.",
+      "minutes": 4,
+      "timerLabel": "Sear"
+    },
+    { "text": "Turn them once, then drop in the butter, garlic, and thyme." },
+    { "text": "Spoon the foaming butter over the steaks until the timer is up." },
+    {
+      "text": "Move them to a warm plate and leave them completely alone.",
+      "minutes": 5,
+      "timerLabel": "Rest",
+      "after": "Sear"
+    },
+    { "text": "Pour the pan butter over, grind on the pepper, and slice against the grain." }
+  ]
+}

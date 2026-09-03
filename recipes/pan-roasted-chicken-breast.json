@@ -1,0 +1,31 @@
+{
+  "id": "pan-roasted-chicken-breast",
+  "title": "Pan-Roasted Chicken Breast",
+  "servings": 2,
+  "totalMinutes": 30,
+  "ingredients": [
+    { "quantity": "2", "item": "chicken breasts, skin on" },
+    { "quantity": "1 tbsp", "item": "olive oil" },
+    { "quantity": "1 tsp", "item": "salt" },
+    { "quantity": "1/2 tsp", "item": "black pepper" },
+    { "quantity": "20 g", "item": "butter" },
+    { "quantity": "1", "item": "lemon, halved" }
+  ],
+  "steps": [
+    { "text": "Heat the oven to 200C fan. Season the breasts all over with the salt and pepper." },
+    {
+      "text": "Sear them skin side down in the oil in an ovenproof pan, without moving them.",
+      "minutes": 6,
+      "timerLabel": "Sear"
+    },
+    {
+      "text": "Turn them, add the butter, and put the pan straight into the oven.",
+      "minutes": 12,
+      "timerLabel": "Roast",
+      "after": "Sear"
+    },
+    { "text": "Squeeze half the lemon over and spoon the pan juices across the top." },
+    { "text": "Leave them on a board for five minutes so the juices settle back in." },
+    { "text": "Slice them thickly and serve with the rest of the lemon." }
+  ]
+}

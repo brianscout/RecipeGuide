@@ -1,0 +1,32 @@
+{
+  "id": "roast-chicken-thighs",
+  "title": "Roast Chicken Thighs",
+  "servings": 4,
+  "totalMinutes": 45,
+  "ingredients": [
+    { "quantity": "8", "item": "chicken thighs, bone-in" },
+    { "quantity": "2 tbsp", "item": "olive oil" },
+    { "quantity": "2 tsp", "item": "salt" },
+    { "quantity": "1 tsp", "item": "dried oregano" },
+    { "quantity": "1/2 tsp", "item": "black pepper" },
+    { "quantity": "1", "item": "lemon, in thick slices" },
+    { "quantity": "4 cloves", "item": "garlic, unpeeled" }
+  ],
+  "steps": [
+    { "text": "Heat the oven to 220C fan and put a roasting tin in to heat with it." },
+    { "text": "Toss the thighs with the oil, oregano, salt, and pepper until they are coated." },
+    { "text": "Lay them skin side up in the hot tin with the lemon and garlic between them." },
+    {
+      "text": "Roast until the skin has tightened and taken its first colour.",
+      "minutes": 25,
+      "timerLabel": "Roast"
+    },
+    {
+      "text": "Spoon the pan juices over the thighs, leaving the skin itself dry.",
+      "minutes": 15,
+      "timerLabel": "Crisp",
+      "after": "Roast"
+    },
+    { "text": "Rest the tin on the hob for five minutes, then serve straight from it." }
+  ]
+}

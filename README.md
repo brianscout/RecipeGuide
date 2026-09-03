@@ -60,11 +60,19 @@ recipe means adding the file and adding its id here. The test run asserts the
 manifest and the folder agree, so a recipe listed in neither order nor place
 fails at the desk rather than silently never appearing on the glasses.
 
-The five shipped recipes are also the fixture set for the screens, so they are
-chosen to span the constraints rather than to be five of the same shape: a
-four-ingredient cook that is over in eight beats, a seventeen-ingredient one
-that runs to thirteen, and four with concurrent timers. `test/recipes.test.mjs`
-holds that spread in place.
+The five shipped recipes are eggs, chicken, and steak, kept deliberately easy:
+at most eight ingredients and at most two timers each, five to seven steps. The
+caps are editorial rather than what the screen can hold — the display draws
+seventeen ingredients and four timers — and `test/recipes.test.mjs` holds them,
+so a recipe growing past them is a decision rather than an accident.
+
+One consequence worth knowing: this corpus no longer reaches the display's
+ceilings, so it is not the fixture that proves the screens fit their worst
+case. The measurement harnesses are, and they are stricter — they draw the
+widest legal row eighteen times rather than the widest row that happens to
+ship. What the corpus no longer exercises at all is more than two concurrent
+timers, and timers running independently of each other: every dependency in it
+is a simple chain.
 
 The ceilings are re-measured, not re-guessed, whenever the screens they come
 from change: serve the repository and open
@@ -118,8 +126,8 @@ Then, in the console at `http://localhost:8000`:
 ```js
 const now = Date.now();
 localStorage.setItem('recipeguide:session', JSON.stringify({
-  screen: 'step', recipeId: 'shakshuka', position: 4, focus: 0,
-  timers: [{ id: 'seed', label: 'Simmer', endsAt: now + 3000, sourceStep: 'shakshuka:2', state: 'running' }],
+  screen: 'step', recipeId: 'pan-seared-steak', position: 4, focus: 0,
+  timers: [{ id: 'seed', label: 'Sear', endsAt: now + 3000, sourceStep: 'pan-seared-steak:2', state: 'running' }],
   alert: null, savedAt: now,
 }));
 location.reload();
@@ -153,10 +161,11 @@ that one is counting the step reads `After Rice` in the footer instead of an
 offer, dim and unpinchable.
 
 It is declared per step rather than inferred from order, because most timers
-are not contingent and the ones that overlap are the point: Miso-Glazed Salmon
-marinates for thirty minutes while the rice cooks for twelve. Making every
-timed step wait for the one before it would forbid the concurrency the whole
-design exists for.
+are not contingent and the ones that overlap are the point — a marinade and a
+pot of rice have no business waiting for each other. Making every timed step
+wait for the one before it would forbid the concurrency the whole design exists
+for. The shipped backlog happens to be all chains, but that is a fact about
+five easy recipes rather than about the rule.
 
 The bar is only that the named timer is not still counting. A cook who never
 started it is not locked out of the rest of the recipe, and one who let it fire

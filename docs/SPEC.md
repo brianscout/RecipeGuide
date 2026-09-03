@@ -155,7 +155,7 @@ Timers are global, not scoped to the step that created them. Starting a timer ap
 
 Some timers cannot honestly start until another has finished — rice steams in its own heat only once the cooking is done, and salmon leaves a marinade only once it is marinated. A step may therefore name, with `after`, the timer its own has to follow.
 
-That relationship is **declared per step, never inferred from order.** Most timers are not contingent, and the ones that overlap are the reason timers are global in the first place: Miso-Glazed Salmon marinates for thirty minutes *while* the rice cooks for twelve. A rule that made each timed step wait for the one before it would forbid exactly the concurrency this design exists to allow.
+That relationship is **declared per step, never inferred from order.** Most timers are not contingent, and the ones that overlap are the reason timers are global in the first place: a marinade and a pot of rice have no business waiting for each other. A rule that made each timed step wait for the one before it would forbid exactly the concurrency this design exists to allow.
 
 The bar is that the named timer is **not still counting**, which is weaker than requiring that it ran. A cook who never started it is not locked out of the rest of the recipe, and one who started it and let it fire is done waiting whether or not they acknowledged it — which also means the rule needs no memory of timers that have been cleared. A step held back names what it is waiting for, dim and unfocusable, where its offer would be.
 

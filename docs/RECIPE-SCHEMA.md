@@ -8,14 +8,14 @@ browser unchanged.
 
 ```json
 {
-  "id": "shakshuka",
-  "title": "Shakshuka",
-  "servings": 4,
-  "totalMinutes": 35,
-  "ingredients": [{ "quantity": "2 tbsp", "item": "olive oil" }],
+  "id": "soft-boiled-eggs",
+  "title": "Soft-Boiled Eggs",
+  "servings": 2,
+  "totalMinutes": 10,
+  "ingredients": [{ "quantity": "4", "item": "eggs, fridge-cold" }],
   "steps": [
-    { "text": "Heat the olive oil in a wide, deep frying pan until it shimmers." },
-    { "text": "Simmer uncovered until the sauce thickens.", "minutes": 10, "timerLabel": "Simmer" }
+    { "text": "Bring a small pan of water to a rolling boil and salt it." },
+    { "text": "Lower the eggs in on a spoon, one at a time.", "minutes": 6, "timerLabel": "Boil" }
   ]
 }
 ```
@@ -57,10 +57,15 @@ salmon out of a marinade that is still marinating:
 ```
 
 **Declared, not inferred.** A step does not automatically wait for the timed
-step before it, because most of the time it should not. Miso-Glazed Salmon
-marinates the salmon for thirty minutes *while* the rice cooks for twelve —
-that overlap is the whole reason timers are global rather than scoped to a
-step. Only some timers are contingent, so only those say so.
+step before it, because most of the time it should not. Timers are global
+precisely so that a marinade and a pot of rice can run at once, and a rule
+that made every timed step wait for the previous one would forbid exactly that.
+Only some timers are contingent, so only those say so.
+
+The shipped backlog happens to be all chains — every dependency in it is a step
+waiting on the one immediately before it — but that is a fact about five easy
+recipes, not about the rule. A recipe with two independent timers and a third
+waiting on one of them is legal and is what the rule is shaped for.
 
 **The bar is that the named timer is not still counting**, which is weaker than
 requiring that it ran. A cook who never started the rice timer is not thereby
@@ -206,10 +211,10 @@ together with the CSS.
 conforms. Each message names the recipe and the exact field:
 
 ```
-shakshuka: steps[4].text is 168 characters, over the 150 character ceiling — split the step rather than shortening the display
-shakshuka: steps[7] has minutes but no timerLabel, so its timer would be unnamed
-shakshuka: ingredients[2] is 51 characters of quantity and item, over the 44 character ceiling — it would wrap onto a second line
-shakshuka: servings is missing
+pan-seared-steak: steps[4].text is 168 characters, over the 150 character ceiling — split the step rather than shortening the display
+pan-seared-steak: steps[7] has minutes but no timerLabel, so its timer would be unnamed
+pan-seared-steak: ingredients[2] is 51 characters of quantity and item, over the 44 character ceiling — it would wrap onto a second line
+pan-seared-steak: servings is missing
 ```
 
 `assertValidRecipe(recipe)` returns the recipe or throws with every problem
