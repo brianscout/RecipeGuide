@@ -92,14 +92,19 @@ it. The pinch after that does what it always would have. Where two timers have
 fired, each takes its own pinch, and the takeover names the second so the first
 pinch is not a surprise.
 
-Two channels reach a cook who is not looking at the display, and only one of
-them is known to work. Brightness and motion carry the alert; `src/haptics.js`
-also asks the band to buzz at the instant a timer fires, which is one call and
-no design of its own. Whether the band answers is the open question the
-[capability probe](#the-capability-probe) exists to settle, and until it has
-been run on the glasses the display is assumed to be carrying the alert alone.
-Desktop Chrome refuses the call without a preceding gesture and says so in the
-console; that refusal is the gate, not a finding.
+Two channels reach a cook who is not looking at the display. Brightness and
+motion carry the alert; `src/haptics.js` also asks the band to buzz at the
+instant a timer fires, which is one call and no design of its own.
+
+The band answers. The [capability probe](#the-capability-probe) was run on the
+glasses on 3 September 2026: `accepted`, and the buzz was felt. What is still
+open is narrower and more awkward. `navigator.vibrate()` is gated on transient
+user activation; the probe runs on a pinch, so it measured a call made with
+activation in hand, and a timer fires on a tick minutes after the gesture that
+started it. Whether an unactivated call is honoured is settled by watching for
+the band at expiry, not by the probe. Until it is, the display is assumed to be
+carrying the alert alone. Desktop Chrome refuses the call without a preceding
+gesture and says so in the console; that refusal is the gate, not a finding.
 
 To exercise the sequence by hand, seed a session whose timer is a few seconds
 from ending and reload:
@@ -235,3 +240,8 @@ it next to the status, then fold both into
 [issue #3](https://github.com/brianscout/RecipeGuide/issues/3) and into
 `docs/SPEC.md`, *Further Notes — Open questions carried into implementation*,
 item 2.
+
+That has been done: `accepted`, felt, 3 September 2026. The probe is kept
+rather than deleted, because the question it half-answers is still live — it
+establishes that the platform has haptics on a gesture, and says nothing about
+a call made without one, which is the only kind the alert makes.

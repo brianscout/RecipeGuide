@@ -298,7 +298,11 @@ Two platform behaviours could not be established from the documentation and are 
 
    The probe guards against its own worst failure mode. Chrome refuses `navigator.vibrate()` without user activation and returns `false` — the same `false` a platform with no haptics returns, which would retire a channel the product may actually have. So activation is checked first and the call is declined rather than made, reported as `blocked`. A `blocked` result on the glasses is not a haptics finding; it is the finding that a pinch does not grant user activation, which matters on its own.
 
-   **Result: not yet established.** The probe runs correctly in a desktop browser, but a desktop pass proves nothing about the device, and the run on the glasses has not been done. Until it is, the alert continues to assume brightness and motion are the only channels available.
+   **Result: haptics are reachable on a gesture.** Run on the glasses on 3 September 2026: the row reported `accepted`, and the band was felt to buzz. Both halves of that matter — the API took the call, and a person wearing it confirmed the wrist moved. So the platform has haptics, a Web App can reach them, and the alert has a second channel that reaches a cook whose eyes are on a pan. The design that assumed brightness and motion were the only channels available was pessimistic, and does not have to be.
+
+   **What the probe could not settle is the case the alert actually needs.** `navigator.vibrate()` is gated on transient user activation, and the probe runs on a pinch by design — so `accepted` is a result about a call made with activation in hand. A timer fires on a tick, minutes after the gesture that started it, with no activation at all. `src/haptics.js` names this and deliberately does not work around it: holding the buzz until the cook's next gesture is the opposite of what the alert is for. Whether the platform honours an unactivated call is answered by watching for the band at the instant a timer expires, which is part of the #9 device pass rather than anything the probe can reach.
+
+   Until that is known the alert keeps its current shape. The display carries it, and the buzz is one call at one seam that either lands or does not — which is the shape this question asked for from the start.
 
 ### Development environment
 
