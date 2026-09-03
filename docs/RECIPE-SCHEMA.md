@@ -35,14 +35,48 @@ browser unchanged.
 | `steps` | yes | array | At least one entry, in cooking order. |
 | `steps[].text` | yes | string | Non-empty, at most **150 characters**. See below. |
 | `steps[].minutes` | no | number | Whole number, at least 1. A step carrying one offers a timer. |
-| `steps[].timerLabel` | no | string | Non-empty. What that timer is called on screen. |
+| `steps[].timerLabel` | no | string | Non-empty, and distinct within the recipe. What that timer is called on screen. |
+| `steps[].after` | no | string | The `timerLabel` of an earlier timed step. Holds this step's timer back while that one is counting. See below. |
 
 `minutes` and `timerLabel` are one feature and travel together: a step with
 only one of the two is rejected. A duration with no label would draw an unnamed
-timer; a label with no duration can offer no timer at all.
+timer; a label with no duration can offer no timer at all. `after` needs
+`minutes` for the same reason — a step with no timer has nothing to hold back.
 
 Any field not in the table is rejected, so `srevings` fails loudly instead of
 being silently ignored.
+
+## Timers that wait on other timers
+
+`after` names the timer a step's own timer has to follow. The rice has to
+finish cooking before it can steam in its own heat, and there is no lifting the
+salmon out of a marinade that is still marinating:
+
+```json
+{ "text": "Slide the pan off the heat and leave the lid on.", "minutes": 10, "timerLabel": "Steam", "after": "Rice" }
+```
+
+**Declared, not inferred.** A step does not automatically wait for the timed
+step before it, because most of the time it should not. Miso-Glazed Salmon
+marinates the salmon for thirty minutes *while* the rice cooks for twelve —
+that overlap is the whole reason timers are global rather than scoped to a
+step. Only some timers are contingent, so only those say so.
+
+**The bar is that the named timer is not still counting**, which is weaker than
+requiring that it ran. A cook who never started the rice timer is not thereby
+locked out of the rest of the recipe, and one who started it and let it fire is
+done waiting whether or not they pinched to clear it. So `after` catches the
+mistake — starting a timer for something that cannot have begun yet — without
+ever leaving a step that cannot be acted on at all.
+
+On screen, a step whose timer is held back reads `After Rice` in the footer
+where the offer would be: dim, no focus bar, and a pinch does nothing.
+
+Three things are rejected at the desk. A name that matches no timer in the
+recipe, since it would silently never hold anything back. A name that belongs
+to a *later* step, which cannot be counting yet and so says something false
+about the cooking. And a repeated `timerLabel`, because `after` resolves by
+name and two timers called `Rest` make it ambiguous.
 
 ## The 150 character ceiling
 
@@ -107,7 +141,7 @@ the digits are widest:
 | 4 timers, labels cut to three characters | 498px | fits |
 | 5 timers, any label length | 622px | does not |
 
-Unlike the two ceilings below, this one is **not** pinned one below what was
+Unlike the other ceilings here, this one is **not** pinned one below what was
 measured. The unit here is a whole timer rather than a character or a row, and
 the gap between four and five is a hundred pixels — no difference in font
 metrics between the desktop browser and the glasses crosses that.

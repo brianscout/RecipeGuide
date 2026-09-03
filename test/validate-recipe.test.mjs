@@ -230,6 +230,72 @@ test('something that is not an object at all is rejected', () => {
   }
 });
 
+// --- after: the timer a timer waits on ------------------------------------
+
+const chained = (steps) => recipe({ steps });
+
+test('a valid dependency is accepted', () => {
+  assert.deepEqual(
+    validateRecipe(
+      chained([
+        { text: 'One', minutes: 10, timerLabel: 'Long' },
+        { text: 'Two', minutes: 5, timerLabel: 'Short', after: 'Long' },
+      ]),
+    ),
+    [],
+  );
+});
+
+test('after naming a timer the recipe does not have is rejected', () => {
+  const message = onlyError(
+    chained([
+      { text: 'One', minutes: 10, timerLabel: 'Long' },
+      { text: 'Two', minutes: 5, timerLabel: 'Short', after: 'Braise' },
+    ]),
+  );
+  assert.match(message, /Braise/);
+  assert.match(message, /not a timer in this recipe/);
+});
+
+test('after naming a later timer is rejected', () => {
+  // A cook cannot have started it yet, so the wait would say something false.
+  const message = onlyError(
+    chained([
+      { text: 'One', minutes: 10, timerLabel: 'Long', after: 'Short' },
+      { text: 'Two', minutes: 5, timerLabel: 'Short' },
+    ]),
+  );
+  assert.match(message, /comes later/);
+});
+
+test('after naming its own timer is rejected', () => {
+  const message = onlyError(
+    chained([{ text: 'One', minutes: 10, timerLabel: 'Long', after: 'Long' }]),
+  );
+  assert.match(message, /its own timer/);
+});
+
+test('a repeated timerLabel is rejected, since after resolves by name', () => {
+  const message = onlyError(
+    chained([
+      { text: 'One', minutes: 10, timerLabel: 'Rest' },
+      { text: 'Two', minutes: 5, timerLabel: 'Rest' },
+    ]),
+  );
+  assert.match(message, /Rest/);
+  assert.match(message, /distinct/);
+});
+
+test('after on a step with no timer of its own is rejected', () => {
+  const message = onlyError(
+    chained([
+      { text: 'One', minutes: 10, timerLabel: 'Long' },
+      { text: 'Two', after: 'Long' },
+    ]),
+  );
+  assert.match(message, /no timer to hold back/);
+});
+
 test('assertValidRecipe returns the recipe when it is valid', () => {
   const valid = recipe();
   assert.equal(assertValidRecipe(valid), valid);

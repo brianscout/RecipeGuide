@@ -211,8 +211,17 @@ function ingredients(state, recipes, now) {
 function footer(state, recipes, now, index, recipe) {
   const node = element('p', 'progress');
   node.append(element('span', 'progress__step', `Step ${index + 1} of ${recipe.steps.length}`));
+
   const offer = timerOffer(state, recipes, now);
-  if (offer) node.append(offerChip(offer));
+  // A step waiting on another timer says what it is waiting for, dim and
+  // without a bar. A control that looks operable and then ignores a pinch is
+  // the worst thing to put on a display a cook glances at; two words that name
+  // the thing they are waiting for is information they can act on.
+  if (offer?.waitingFor) {
+    node.append(element('span', 'waiting', `After ${offer.waitingFor}`));
+  } else if (offer) {
+    node.append(offerChip(offer));
+  }
   return node;
 }
 

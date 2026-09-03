@@ -34,7 +34,7 @@ export const MAX_INGREDIENT_CHARS = 44;
  * is what keeps that promise keepable.
  *
  * Not pinned one below the measured fit, unlike the ceilings above. The unit
- * here is a whole timer rather than a character or a row: four fit in 495px of
+ * here is a whole timer rather than a character or a row: four fit in 498px of
  * the 520px line and five need 622px, so the cliff is a hundred pixels wide
  * and no font metric crosses it. See MAX_TIMERS_SHOWN in src/render.js, which
  * still counts what it cannot draw in case a session predates this.
@@ -43,7 +43,7 @@ export const MAX_CONCURRENT_TIMERS = 4;
 
 const RECIPE_FIELDS = ['id', 'title', 'servings', 'totalMinutes', 'ingredients', 'steps'];
 const INGREDIENT_FIELDS = ['quantity', 'item'];
-const STEP_FIELDS = ['text', 'minutes', 'timerLabel'];
+const STEP_FIELDS = ['text', 'minutes', 'timerLabel', 'after'];
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isText = (value) => typeof value === 'string' && value.trim() !== '';
@@ -100,7 +100,7 @@ function checkIngredient(errors, name, index, ingredient) {
 function checkStep(errors, name, index, step) {
   const at = `steps[${index}]`;
   if (!isObject(step)) {
-    errors.push(`${name}: ${at} must be an object of { text, minutes?, timerLabel? }`);
+    errors.push(`${name}: ${at} must be an object of { text, minutes?, timerLabel?, after? }`);
     return;
   }
 
@@ -129,6 +129,18 @@ function checkStep(errors, name, index, step) {
   }
   if (hasLabel && !hasMinutes) {
     errors.push(`${name}: ${at} has a timerLabel but no minutes, so no timer can be offered`);
+  }
+
+  // `after` names the timer this step's own timer has to follow. It is only
+  // meaningful on a step that has one; whether the name resolves is checked
+  // against the whole recipe, since a step cannot see its siblings from here.
+  if (step.after !== undefined) {
+    if (!isText(step.after)) {
+      errors.push(`${name}: ${at}.after must be a non-empty string naming an earlier timerLabel`);
+    }
+    if (!hasMinutes) {
+      errors.push(`${name}: ${at} has after but no minutes, so it has no timer to hold back`);
+    }
   }
 
   checkUnknown(errors, name, `${at}.`, step, STEP_FIELDS);
@@ -185,8 +197,52 @@ export function validateRecipe(recipe) {
       );
     }
   }
+  checkDependencies(errors, name, recipe);
   checkUnknown(errors, name, '', recipe, RECIPE_FIELDS);
   return errors;
+}
+
+// `after` is resolved by name, so the names have to be unique and they have to
+// point backwards. Both are checked here rather than in checkStep, because a
+// step cannot see its siblings.
+//
+// Pointing backwards is not needed to keep the application running — a step
+// waiting on a later timer is simply never held back, since that timer cannot
+// be counting yet. It is a check because such a step says something false
+// about the cooking, and an author who wrote it meant something else.
+function checkDependencies(errors, name, recipe) {
+  if (!Array.isArray(recipe.steps)) return;
+
+  const labelAt = new Map();
+  recipe.steps.forEach((step, index) => {
+    if (!isObject(step) || !isText(step.timerLabel)) return;
+    if (labelAt.has(step.timerLabel)) {
+      errors.push(
+        `${name}: steps[${index}].timerLabel repeats "${step.timerLabel}" from ` +
+          `steps[${labelAt.get(step.timerLabel)}] — after names a timer, so the names must be distinct`,
+      );
+      return;
+    }
+    labelAt.set(step.timerLabel, index);
+  });
+
+  recipe.steps.forEach((step, index) => {
+    if (!isObject(step) || !isText(step.after)) return;
+    const at = `steps[${index}]`;
+    if (!labelAt.has(step.after)) {
+      errors.push(`${name}: ${at}.after names "${step.after}", which is not a timer in this recipe`);
+      return;
+    }
+    const target = labelAt.get(step.after);
+    if (target === index) {
+      errors.push(`${name}: ${at}.after names its own timer, so it could never start`);
+    } else if (target > index) {
+      errors.push(
+        `${name}: ${at}.after names "${step.after}" at ${`steps[${target}]`}, which comes later — ` +
+          `a timer can only wait on one a cook could already have started`,
+      );
+    }
+  });
 }
 
 /**

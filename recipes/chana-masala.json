@@ -35,21 +35,24 @@
     {
       "text": "Cook the masala down until it darkens and the ghee beads at the edge of the pan.",
       "minutes": 8,
-      "timerLabel": "Masala"
+      "timerLabel": "Masala",
+      "after": "Onions"
     },
     { "text": "Add the chickpeas and the salt, then pour in 250 ml of water and stir to loosen." },
     { "text": "Crush a ladleful of the chickpeas against the side of the pan to thicken the gravy." },
     {
       "text": "Simmer uncovered until the gravy coats the chickpeas rather than pooling around them.",
       "minutes": 15,
-      "timerLabel": "Simmer"
+      "timerLabel": "Simmer",
+      "after": "Masala"
     },
     { "text": "Stir in the garam masala and the amchur. Taste, and add salt until the flavours sharpen." },
     { "text": "If it has gone tight, loosen with hot water; if it is loose, simmer a few minutes longer." },
     {
       "text": "Take the pan off the heat and leave it covered so the chickpeas drink up the gravy.",
       "minutes": 5,
-      "timerLabel": "Rest"
+      "timerLabel": "Rest",
+      "after": "Simmer"
     },
     { "text": "Scatter over the coriander and serve with rice or flatbread." }
   ]

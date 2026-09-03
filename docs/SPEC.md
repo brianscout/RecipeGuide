@@ -153,6 +153,12 @@ Keyboard listening, rendering, persistence, and the tick interval are I/O perfor
 
 Timers are global, not scoped to the step that created them. Starting a timer appends an entry to a list held in application state; it continues running regardless of subsequent navigation. Multiple timers may run concurrently.
 
+Some timers cannot honestly start until another has finished — rice steams in its own heat only once the cooking is done, and salmon leaves a marinade only once it is marinated. A step may therefore name, with `after`, the timer its own has to follow.
+
+That relationship is **declared per step, never inferred from order.** Most timers are not contingent, and the ones that overlap are the reason timers are global in the first place: Miso-Glazed Salmon marinates for thirty minutes *while* the rice cooks for twelve. A rule that made each timed step wait for the one before it would forbid exactly the concurrency this design exists to allow.
+
+The bar is that the named timer is **not still counting**, which is weaker than requiring that it ran. A cook who never started it is not locked out of the rest of the recipe, and one who started it and let it fire is done waiting whether or not they acknowledged it — which also means the rule needs no memory of timers that have been cleared. A step held back names what it is waiting for, dim and unfocusable, where its offer would be.
+
 Each timer stores an **absolute epoch timestamp** for when it ends, never a decrementing remaining-seconds counter. Remaining time is always derived by subtracting the supplied current time. This makes the timer correct across reloads and any suspension the platform may impose without the application needing to detect that suspension occurred.
 
 A timer indicator is rendered on every screen while any timer is running, and is omitted entirely when none are. The common case — a step with no active timer — gives the full display to the instruction.

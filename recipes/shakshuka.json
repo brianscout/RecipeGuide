@@ -30,14 +30,16 @@
     {
       "text": "Simmer uncovered until the sauce thickens and a spoon leaves a clear trail across the pan.",
       "minutes": 10,
-      "timerLabel": "Simmer"
+      "timerLabel": "Simmer",
+      "after": "Soften"
     },
     { "text": "Taste the sauce. Adjust with salt and pepper, and a pinch of sugar if it tastes sharp." },
     { "text": "Make four wells in the sauce with the back of a spoon. Crack one egg into each well." },
     {
       "text": "Cover and cook over low heat until the whites are set and the yolks are still soft.",
       "minutes": 8,
-      "timerLabel": "Eggs"
+      "timerLabel": "Eggs",
+      "after": "Simmer"
     },
     { "text": "Scatter over the feta and parsley, drizzle with olive oil, and serve from the pan with bread." }
   ]

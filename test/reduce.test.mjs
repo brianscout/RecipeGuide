@@ -986,6 +986,105 @@ test('a persisted timer with no record of being announced is announced', () => {
 });
 
 
+// --- Timers that wait on other timers -------------------------------------
+// Its own catalogue rather than a dependency added to gamma, whose two timers
+// are what the concurrency tests above run at once.
+const CHAIN = [
+  {
+    id: 'chain',
+    title: 'Chain',
+    servings: 2,
+    totalMinutes: 30,
+    ingredients: [{ quantity: '1', item: 'thing' }],
+    steps: [
+      { text: 'Start the long one', minutes: 20, timerLabel: 'Long' },
+      { text: 'Only after the long one', minutes: 5, timerLabel: 'Short', after: 'Long' },
+      { text: 'Beholden to nothing', minutes: 5, timerLabel: 'Free' },
+    ],
+  },
+];
+
+const chain = createReduce(CHAIN);
+
+// The cook selects the recipe, then walks right to the given step number.
+function onStep(number, events = [], now = NOW) {
+  let state = chain(initialState(), ACTIVATE, now);
+  for (let i = 0; i < number; i++) state = chain(state, SWIPE_RIGHT, now);
+  return events.reduce((current, event) => chain(current, event, now), state);
+}
+
+test('a step waiting on a running timer says what it waits for', () => {
+  const state = onStep(1, [ACTIVATE, SWIPE_RIGHT]);
+  const offer = timerOffer(state, CHAIN, NOW);
+  assert.equal(offer.label, 'Short');
+  assert.equal(offer.waitingFor, 'Long');
+});
+
+test('a pinch does nothing on a step waiting on a running timer', () => {
+  const waiting = onStep(1, [ACTIVATE, SWIPE_RIGHT]);
+  assert.equal(chain(waiting, ACTIVATE, NOW), waiting);
+  assert.equal(waiting.timers.length, 1);
+});
+
+test('the wait ends when the timer it waits on finishes', () => {
+  const waiting = onStep(1, [ACTIVATE, SWIPE_RIGHT]);
+  const later = NOW + 21 * 60 * 1000;
+  assert.equal(timerOffer(waiting, CHAIN, later).waitingFor, null);
+
+  // The first pinch acknowledges the timer that has just fired, as a pinch
+  // does anywhere. The second is the one this step's own timer gets.
+  const acknowledged = chain(waiting, ACTIVATE, later);
+  assert.deepEqual(acknowledged.timers, []);
+  assert.equal(chain(acknowledged, ACTIVATE, later).timers.length, 1);
+});
+
+test('a finished prerequisite takes the pinch before the step it unblocks', () => {
+  // Worth pinning on its own: the gesture that ends the wait and the gesture
+  // that starts the waiting timer are two gestures, never one.
+  const later = NOW + 21 * 60 * 1000;
+  const waiting = onStep(1, [ACTIVATE, SWIPE_RIGHT]);
+  assert.ok(firedTimers(chain(waiting, TICK, later)).length === 1);
+  const once = chain(waiting, ACTIVATE, later);
+  assert.deepEqual(once.timers, []);
+  assert.equal(once.alert, null);
+});
+
+test('a timer never started holds nothing back, so no step is unreachable', () => {
+  // Walked straight past the long one without starting it.
+  const state = onStep(2);
+  const offer = timerOffer(state, CHAIN, NOW);
+  assert.equal(offer.waitingFor, null);
+  assert.equal(chain(state, ACTIVATE, NOW).timers.length, 1);
+});
+
+test('acknowledging the timer waited on leaves the wait over', () => {
+  const later = NOW + 21 * 60 * 1000;
+  const fired = chain(onStep(1, [ACTIVATE, SWIPE_RIGHT]), TICK, later);
+  // The pinch that clears the takeover removes the timer from state entirely,
+  // so the wait cannot depend on a record of it having run.
+  const cleared = chain(fired, ACTIVATE, later);
+  assert.deepEqual(cleared.timers, []);
+  assert.equal(timerOffer(cleared, CHAIN, later).waitingFor, null);
+});
+
+test('a step naming no prerequisite is never held back', () => {
+  const state = onStep(1, [ACTIVATE, SWIPE_RIGHT, SWIPE_RIGHT]);
+  const offer = timerOffer(state, CHAIN, NOW);
+  assert.equal(offer.label, 'Free');
+  assert.equal(offer.waitingFor, null);
+  assert.equal(chain(state, ACTIVATE, NOW).timers.length, 2);
+});
+
+test('a waiting step whose own timer is running offers nothing, like any other', () => {
+  const later = NOW + 21 * 60 * 1000;
+  const waiting = onStep(1, [ACTIVATE, SWIPE_RIGHT]);
+  const started = after([ACTIVATE, ACTIVATE], { from: waiting, now: later, reducer: chain });
+  assert.equal(started.timers.length, 1);
+  assert.equal(started.timers[0].label, 'Short');
+  // Running, so nothing to offer — the same rule as any other step.
+  assert.equal(timerOffer(started, CHAIN, later), null);
+});
+
 test('the reducer does not mutate the state it is given', () => {
   const opened = deepFreeze(initialState());
   const moved = reduce(opened, FOCUS_DOWN, NOW);

@@ -34,13 +34,15 @@
     {
       "text": "Slide the pan off the heat and leave the lid on. The rice finishes in its own steam.",
       "minutes": 10,
-      "timerLabel": "Steam"
+      "timerLabel": "Steam",
+      "after": "Rice"
     },
     { "text": "Heat the grill to high and line a tray with foil. Lift the salmon out and let the excess drip off." },
     {
       "text": "Grill the salmon skin side down until the top is lacquered and blistered in places.",
       "minutes": 8,
-      "timerLabel": "Grill"
+      "timerLabel": "Grill",
+      "after": "Marinate"
     },
     { "text": "Warm the held-back glaze with the rice vinegar and a splash of water until it just loosens." },
     { "text": "Fork the rice through to separate the grains and spoon it into four bowls." },

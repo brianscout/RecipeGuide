@@ -29,12 +29,14 @@
     {
       "text": "Roast again until the skin is crisp and the potatoes have drunk most of the stock.",
       "minutes": 25,
-      "timerLabel": "Crisp"
+      "timerLabel": "Crisp",
+      "after": "Roast"
     },
     {
       "text": "Set the tin on the hob and leave it alone so the juices settle back into the meat.",
       "minutes": 10,
-      "timerLabel": "Rest"
+      "timerLabel": "Rest",
+      "after": "Crisp"
     },
     { "text": "Scatter over the parsley and serve straight from the tin, spooning the pan juices over each plate." }
   ]

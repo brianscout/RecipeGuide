@@ -146,6 +146,24 @@ somehow running, the row shows three and counts the rest; the count takes a
 timer's place rather than squeezing in beside four, because it is the one thing
 in the row that must never be clipped.
 
+## Timers that wait on other timers
+
+A step can name the timer its own has to follow — `"after": "Rice"` — and while
+that one is counting the step reads `After Rice` in the footer instead of an
+offer, dim and unpinchable.
+
+It is declared per step rather than inferred from order, because most timers
+are not contingent and the ones that overlap are the point: Miso-Glazed Salmon
+marinates for thirty minutes while the rice cooks for twelve. Making every
+timed step wait for the one before it would forbid the concurrency the whole
+design exists for.
+
+The bar is only that the named timer is not still counting. A cook who never
+started it is not locked out of the rest of the recipe, and one who let it fire
+is done waiting whether or not they pinched to clear it. Details and what the
+validator rejects are in
+[docs/RECIPE-SCHEMA.md](docs/RECIPE-SCHEMA.md).
+
 ## Leaving a cook, and stopping one
 
 Two different things, and the difference is the timers.

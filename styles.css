@@ -281,6 +281,16 @@ body {
   color: var(--accent);
 }
 
+/* A step whose timer waits on another one. Deliberately without the bar the
+   offer wears: nothing here is operable, and the bar is what says a pinch
+   belongs to something. Dim, because it is the absence of an action rather
+   than an action. */
+.waiting {
+  padding-left: 18px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
 /* Finished is the brightest thing in the row and the only moving thing on the
    screen: it is the one that wants a cook's attention, and it keeps wanting it
    until a pinch clears it. Motion rather than more light, because the takeover

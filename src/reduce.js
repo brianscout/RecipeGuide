@@ -174,14 +174,38 @@ export function timerOffer(state, recipes, now) {
 
   const sourceStep = sourceStepOf(recipe, index);
   const running = state.timers.some((timer) => timer.sourceStep === sourceStep && timer.endsAt > now);
-  return running ? null : { sourceStep, label: step.timerLabel, minutes: step.minutes };
+  if (running) return null;
+
+  // A step may name the timer it has to follow — the rice has to finish
+  // cooking before it can steam in its own heat, and there is no lifting the
+  // salmon out of a marinade that is still marinating.
+  //
+  // The bar is only that the named timer is not still counting. It is not that
+  // it ran: a cook who never started the rice timer is not thereby locked out
+  // of the rest of the recipe, and one who started it and let it fire is done
+  // waiting whether or not they pinched to clear it. So this catches the
+  // mistake — starting a timer for something that cannot have begun yet —
+  // without ever leaving a cook with a step they cannot act on at all.
+  const waitingFor = counting(state, recipe, step.after, now) ? step.after : null;
+  return { sourceStep, label: step.timerLabel, minutes: step.minutes, waitingFor };
+}
+
+// Whether the timer a step names as its prerequisite is one of the ones still
+// counting. An unknown label counts as nothing to wait for; the validator is
+// what makes a label unresolvable a desk failure rather than a silent one.
+function counting(state, recipe, label, now) {
+  if (label === undefined) return false;
+  const index = recipe.steps.findIndex((step) => step.timerLabel === label);
+  if (index === -1) return false;
+  const sourceStep = sourceStepOf(recipe, index);
+  return state.timers.some((timer) => timer.sourceStep === sourceStep && timer.endsAt > now);
 }
 
 function startTimer(state, recipes, now) {
   const offer = timerOffer(state, recipes, now);
-  // No duration on this step, or its timer is already running. Returning the
-  // same state is what lets the edges skip a redraw.
-  if (!offer) return state;
+  // No duration on this step, its timer is already running, or it is waiting on
+  // one that is. Returning the same state is what lets the edges skip a redraw.
+  if (!offer || offer.waitingFor) return state;
 
   const endsAt = now + offer.minutes * MINUTE_MS;
   const timer = {
