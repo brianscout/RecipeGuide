@@ -291,11 +291,20 @@ function acknowledge(state) {
 }
 
 // Focus cycles among the focusable elements of the current screen. The menu's
-// are its recipes; the completion screen's is its one way back to them. The
-// ingredients screen has none, and a step has at most one — the timer it
-// offers — so there is never anything for vertical input to move to.
+// are its recipes; the completion screen's is its one way back to them; the
+// ingredients screen has none.
+//
+// A step has two, and the first of them is the step's own slot: the timer it
+// offers, or nothing at all where it carries no duration. That slot is first
+// so a pinch with no vertical input keeps meaning exactly what it meant before
+// stopping existed — start the timer, or do nothing. Stopping sits second
+// because it must never be what an accidental pinch lands on.
+const STEP_PRIMARY = 0;
+export const STEP_STOP = 1;
+
 function focusableCount(state, recipes) {
   if (state.screen === MENU) return recipes.length;
+  if (state.screen === STEP) return 2;
   return state.screen === DONE ? 1 : 0;
 }
 
@@ -318,15 +327,42 @@ function toMenu(state, recipes) {
   return { ...initialState(), timers: state.timers, alert: state.alert, focus };
 }
 
+// Stopping is not the same thing as leaving. Left from the ingredients backs
+// out of a cook and keeps its timers counting, because a cook who wants to
+// look something up on the menu has not stopped cooking and a timer that died
+// because they navigated is the whole failure this product exists to avoid.
+//
+// This is the other one: the cook is done with this recipe before the recipe
+// is done, and the timers it started are timing nothing. So they go, and the
+// takeover or signalling row that any of them raised goes with them — an alert
+// naming a timer that no longer exists is worse than no alert.
+//
+// The abandoned recipe stays focused on the menu, as it does when backing out,
+// so stopping something by mistake costs one pinch to resume rather than a
+// hunt back down the list.
+function stopCooking(state, recipes) {
+  const focus = Math.max(
+    0,
+    recipes.findIndex((recipe) => recipe.id === state.recipeId),
+  );
+  return { ...initialState(), focus };
+}
+
 function activate(state, recipes, now) {
   // A finished timer takes the pinch before the screen does.
   const acknowledged = acknowledge(state);
   if (acknowledged) return acknowledged;
 
   if (state.screen === DONE) return toMenu(state, recipes);
-  // The one action a step ever offers is the timer it carries, so a pinch
-  // there means starting it and means nothing else.
-  if (state.screen === STEP) return startTimer(state, recipes, now);
+  // A pinch on a step acts on what is focused. Unfocused — which is where
+  // every step starts, since changing position resets focus — that is the
+  // timer the step offers and nothing else, exactly as it was before stopping
+  // existed. Stopping takes a deliberate swipe to reach first.
+  if (state.screen === STEP) {
+    return state.focus === STEP_STOP
+      ? stopCooking(state, recipes)
+      : startTimer(state, recipes, now);
+  }
   if (state.screen !== MENU) return state;
   const recipe = recipes[state.focus];
   if (!recipe) return state;

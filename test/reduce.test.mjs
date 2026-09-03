@@ -238,12 +238,94 @@ test('left from the ingredients is the only way out of a cook', () => {
 
 // Secondary actions on a step arrive with timers. Until then the cook screen
 // has nothing to focus, and vertical input must not disturb the position.
-test('vertical input does nothing on the ingredients or on a step', () => {
-  for (const from of [cooking('alpha'), cooking('alpha', SWIPE_RIGHT)]) {
-    for (const event of [FOCUS_UP, FOCUS_DOWN]) {
-      assert.equal(reduce(from, event, NOW), from);
-    }
+test('vertical input does nothing on the ingredients, which has nothing to focus', () => {
+  const from = cooking('alpha');
+  for (const event of [FOCUS_UP, FOCUS_DOWN]) {
+    assert.equal(reduce(from, event, NOW), from);
   }
+});
+
+test('vertical input on a step moves between its own action and stopping', () => {
+  const from = cooking('alpha', SWIPE_RIGHT);
+  assert.equal(from.focus, 0);
+  // Two elements, so either direction is the same toggle.
+  for (const event of [FOCUS_UP, FOCUS_DOWN]) {
+    assert.equal(reduce(from, event, NOW).focus, 1);
+    assert.equal(reduce(reduce(from, event, NOW), event, NOW).focus, 0);
+  }
+});
+
+test('a step opens on its own action, never on stopping', () => {
+  // Every way onto a step, since focus surviving a position change would put
+  // an accidental pinch on the one action that ends the cook.
+  for (const state of [
+    cooking('alpha', SWIPE_RIGHT),
+    cooking('alpha', ...right(3)),
+    cooking('alpha', ...right(2), FOCUS_DOWN, SWIPE_RIGHT),
+    cooking('alpha', ...right(2), FOCUS_DOWN, SWIPE_LEFT),
+    cooking('alpha', ...right(4), SWIPE_LEFT),
+  ]) {
+    assert.equal(state.screen, STEP);
+    assert.equal(state.focus, 0);
+  }
+});
+
+test('stopping from a step returns to the menu with that recipe focused', () => {
+  const state = cooking('gamma', SWIPE_RIGHT, FOCUS_DOWN, ACTIVATE);
+  assert.equal(state.screen, MENU);
+  assert.equal(state.recipeId, null);
+  assert.equal(state.position, 0);
+  assert.equal(state.focus, 2);
+});
+
+test('stopping clears the timers the recipe started', () => {
+  const cook = cooking('gamma', SWIPE_RIGHT, ACTIVATE);
+  assert.equal(cook.timers.length, 1);
+  const stopped = after([FOCUS_DOWN, ACTIVATE], { from: cook });
+  assert.deepEqual(stopped.timers, []);
+  assert.equal(stopped.alert, null);
+});
+
+test('stopping clears a timer that has already fired, and its alert with it', () => {
+  const twentyOneMinutes = NOW + 21 * 60 * 1000;
+  const fired = after([SWIPE_RIGHT, ACTIVATE], { from: onIngredients('gamma') });
+  const alerting = reduce(fired, TICK, twentyOneMinutes);
+  assert.ok(alertingTimer(alerting));
+
+  // The pinch that acknowledges comes first, as it does everywhere; the one
+  // after it is the one that stops.
+  const stopped = after([ACTIVATE, FOCUS_DOWN, ACTIVATE], {
+    from: alerting,
+    now: twentyOneMinutes,
+  });
+  assert.equal(stopped.screen, MENU);
+  assert.deepEqual(stopped.timers, []);
+  assert.equal(stopped.alert, null);
+});
+
+test('leaving a cook keeps its timers, where stopping one ends them', () => {
+  // The whole distinction between the two exits, in one assertion.
+  const cook = cooking('gamma', SWIPE_RIGHT, ACTIVATE);
+  const left = after([SWIPE_LEFT, SWIPE_LEFT], { from: cook });
+  const stopped = after([FOCUS_DOWN, ACTIVATE], { from: cook });
+
+  assert.equal(left.screen, MENU);
+  assert.equal(stopped.screen, MENU);
+  assert.equal(timersAt(left, NOW).length, 1);
+  assert.deepEqual(stopped.timers, []);
+});
+
+test('a pinch on a step with stopping unfocused still starts the timer', () => {
+  const state = cooking('gamma', SWIPE_RIGHT, FOCUS_DOWN, FOCUS_UP, ACTIVATE);
+  assert.equal(state.screen, STEP);
+  assert.equal(state.timers.length, 1);
+});
+
+test('stopping does not mutate the state it ends', () => {
+  const cook = deepFreeze(cooking('gamma', SWIPE_RIGHT, ACTIVATE, FOCUS_DOWN));
+  const stopped = reduce(cook, ACTIVATE, NOW);
+  assert.equal(cook.timers.length, 1);
+  assert.deepEqual(stopped.timers, []);
 });
 
 test('enter does nothing on the ingredients, or on a step with no duration', () => {

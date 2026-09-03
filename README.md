@@ -125,6 +125,40 @@ localStorage.setItem('recipeguide:session', JSON.stringify({
 location.reload();
 ```
 
+## Leaving a cook, and stopping one
+
+Two different things, and the difference is the timers.
+
+**Leaving** is the horizontal exit that has always been there: left off the
+front of the flow, through the ingredients, to the menu. Timers keep counting.
+A cook who wants to glance at another recipe has not stopped cooking, and a
+timer that died because they navigated is the failure global timers exist to
+prevent.
+
+**Stopping** is the secondary action on a step, and it ends the cook and its
+timers together. On a step, swipe down: the progress line is replaced by
+`Stop cooking`, and a pinch takes it. The timers go, along with any takeover or
+signalling row one of them had raised — an alert naming a timer that no longer
+exists is worse than no alert at all.
+
+Three details are load-bearing rather than incidental:
+
+- **A step opens on its own action, never on stopping.** Focus resets on every
+  position change, so a pinch that follows no vertical input still means what
+  it always meant: start the timer, or nothing. Ending a cook is never what a
+  stray pinch lands on.
+- **It takes the progress row rather than adding one.** The instruction pane is
+  what the 150 character ceiling was measured against, so an action that grew
+  the screen would quietly cost the longest instruction its last line. Focused
+  or not, that row is 28px.
+- **Exactly one thing wears the focus bar.** Moving focus to `Stop cooking`
+  dims the timer offer above it, because two accented bars would leave a cook
+  guessing what their pinch is about to do.
+
+The stopped recipe stays focused on the menu, so starting it again — or undoing
+a mistake — is one pinch. The timers are not recoverable, which is the price of
+stopping meaning what it says.
+
 ## Resuming a session
 
 The session — the recipe, the position, and the timer list — is written to local

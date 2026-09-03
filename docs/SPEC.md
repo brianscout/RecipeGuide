@@ -103,10 +103,12 @@ Back navigation is not provided by the platform. The application owns its own re
 Direction has one fixed meaning throughout the application:
 
 - **Left and right move position in the flow.** In cook mode this means the previous or next screen in the recipe. In the menu, where there is no flow, horizontal input does nothing.
-- **Up and down cycle focus** among the focusable elements of the current screen, with a visible focus indicator. In the menu, this is how the recipe list is traversed.
+- **Up and down cycle focus** among the focusable elements of the current screen, with a visible focus indicator. In the menu, this is how the recipe list is traversed. On a step it moves between the step's own action — the timer it offers, or nothing where it carries no duration — and stopping the cook.
 - **Enter activates** the focused element.
 
 This is deliberately mode-independent. The user must be able to advance a step without first determining which screen they are on.
+
+A step always opens on its own action rather than on stopping, and changing position resets focus, so a pinch that follows no vertical input means exactly what it did before stopping existed: start the timer, or nothing. Stopping is never what an accidental pinch lands on.
 
 ### Flow model
 
@@ -117,6 +119,13 @@ menu  <->  ingredients  <->  step 1  <->  ...  <->  step N  <->  done
 ```
 
 Selecting a recipe from the menu enters at the ingredients position. Left from ingredients returns to the menu. Placing ingredients at position zero rather than entering directly at step one is intentional: it provides a mise en place screen at the moment the cook's hands are still clean, and it inserts a buffer so that a stray left swipe during a cook does not immediately abandon it.
+
+There are two ways out of a cook and they are not the same thing:
+
+- **Leaving.** Left off the front of the flow, through the ingredients, to the menu. Timers keep counting. A cook who wants to check another recipe or glance at the list has not stopped cooking, and a timer that died because they navigated is the exact failure global timers exist to prevent.
+- **Stopping.** The secondary action on a step, reached by vertical focus. The cook is finished with this recipe before the recipe is finished with them, so the timers it started are timing nothing: they are discarded, along with any takeover or signalling row one of them raised. An alert naming a timer that no longer exists is worse than no alert.
+
+Both land on the menu with the abandoned recipe still focused, so resuming after either — including after stopping by mistake — is one pinch rather than a hunt back down the list. What stopping does not offer is recovery of the timers, which is the price of it meaning what it says.
 
 ### State and events
 

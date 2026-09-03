@@ -251,13 +251,23 @@ body {
 }
 
 /* The offer wears the bar of a focused menu row, because a pinch operates it
-   and a pinch operates those. */
+   and a pinch operates those. The bar is always there and only its light
+   changes, so moving focus down to Stop cooking moves the eye rather than the
+   row — the same trick .action uses, for the same reason. */
 .timers__timer--offer {
   padding-left: 14px;
-  border-left: 6px solid var(--accent);
+  border-left: 6px solid var(--ground);
+}
+
+.timers__timer--offer-focused {
+  border-left-color: var(--accent);
 }
 
 .timers__timer--offer .timers__label {
+  color: var(--dim);
+}
+
+.timers__timer--offer-focused .timers__label {
   color: var(--content);
 }
 
@@ -338,4 +348,18 @@ body {
   flex: none;
   font-size: 18px;
   color: var(--dim);
+}
+
+/* Stopping the cook, drawn in the progress row's place and at exactly its
+   height: the pane above it is a measured ceiling, and an action that took a
+   line from the instruction to offer itself would be a poor trade. Focused is
+   the only state it has, because focus is the only thing that draws it. */
+.progress--stop {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding-left: 14px;
+  border-left: 6px solid var(--accent);
+  color: var(--content);
+  font-weight: 700;
 }

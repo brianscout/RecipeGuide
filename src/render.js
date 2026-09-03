@@ -16,6 +16,7 @@ import {
   timerOffer,
   alertingTimer,
   firedTimers,
+  STEP_STOP,
 } from './reduce.js';
 
 function element(tag, className, text) {
@@ -100,8 +101,18 @@ function chip(className, label, value) {
 // What a step offers before it is started: its length, and the one gesture
 // that starts it. Drawn with the focus bar of a focused menu row, because the
 // gesture that operates it is the same gesture.
-const offerChip = (offer) =>
-  chip('timers__timer timers__timer--offer', `Start ${offer.label}`, `${offer.minutes} min`);
+//
+// It carries focus only while focus is on it. A step also offers stopping, one
+// swipe below, and two things wearing the focus bar at once would leave a cook
+// guessing what their pinch is about to do.
+const offerChip = (offer, focused) =>
+  chip(
+    focused
+      ? 'timers__timer timers__timer--offer timers__timer--offer-focused'
+      : 'timers__timer timers__timer--offer',
+    `Start ${offer.label}`,
+    `${offer.minutes} min`,
+  );
 
 // A finished timer reads as finished, and keeps reading that way until a pinch
 // clears it: the brightest thing in the row, and the only moving thing on the
@@ -123,7 +134,7 @@ function timers(state, recipes, now) {
   // hidden with no sign of it is the one failure this display cannot afford.
   const shown = running.slice(0, MAX_TIMERS_SHOWN - (offer ? OFFER_COST : 0));
   const node = element('div', 'timers');
-  if (offer) node.append(offerChip(offer));
+  if (offer) node.append(offerChip(offer, state.focus !== STEP_STOP));
   node.append(...shown.map(timerChip));
   if (running.length > shown.length) {
     node.append(element('span', 'timers__more', `+${running.length - shown.length}`));
@@ -186,11 +197,17 @@ function step(state, recipes, now) {
   const live = timers(state, recipes, now);
   if (live) row.append(live);
 
-  return screen(
-    row,
-    element('p', 'instruction', instruction.text),
-    element('p', 'progress', `Step ${index + 1} of ${recipe.steps.length}`),
-  );
+  // Stopping takes the progress row rather than adding one. The instruction
+  // pane's height is what MAX_STEP_CHARS was measured against, so a secondary
+  // action that grew the screen would quietly cost the longest instruction its
+  // last line. It is drawn only while focused, which is what docs/SPEC.md asks
+  // of a secondary action: reached by vertical focus rather than always there.
+  const footer =
+    state.focus === STEP_STOP
+      ? element('p', 'progress progress--stop', 'Stop cooking')
+      : element('p', 'progress', `Step ${index + 1} of ${recipe.steps.length}`);
+
+  return screen(row, element('p', 'instruction', instruction.text), footer);
 }
 
 // The end of the flow. Right stops here; left is still the way back into the
